@@ -19,6 +19,11 @@
 #include <time.h>
 #include <assert.h>
 
+// Fleet Combo era lock: -1 follows Link's age (vanilla), 0 keeps the child-era world, 1 the adult-era world.
+// Time travel then changes only Link, so either Link can visit either era.
+#define FLEET_ERA_SETTING CVarGetInteger("gFleetCombo.Era", -1)
+#define FLEET_ERA_IS_ADULT (FLEET_ERA_SETTING < 0 ? LINK_IS_ADULT : FLEET_ERA_SETTING == 1)
+
 TransitionUnk sTrnsnUnk;
 s32 gTrnsnUnkState;
 VisMono gPlayVisMono;
@@ -481,11 +486,11 @@ void Play_Init(GameState* thisx) {
         gSaveContext.nayrusLoveTimer = 0;
         Magic_Reset(play);
         gSaveContext.sceneLayer = SCENE_LAYER_CUTSCENE_FIRST + (gSaveContext.cutsceneIndex & 0xF);
-    } else if (!LINK_IS_ADULT && IS_DAY) {
+    } else if (!FLEET_ERA_IS_ADULT && IS_DAY) { // Fleet Combo: the world follows the era, not Link's age
         gSaveContext.sceneLayer = SCENE_LAYER_CHILD_DAY;
-    } else if (!LINK_IS_ADULT && !IS_DAY) {
+    } else if (!FLEET_ERA_IS_ADULT && !IS_DAY) {
         gSaveContext.sceneLayer = SCENE_LAYER_CHILD_NIGHT;
-    } else if (LINK_IS_ADULT && IS_DAY) {
+    } else if (FLEET_ERA_IS_ADULT && IS_DAY) {
         gSaveContext.sceneLayer = SCENE_LAYER_ADULT_DAY;
     } else {
         gSaveContext.sceneLayer = SCENE_LAYER_ADULT_NIGHT;
@@ -494,7 +499,7 @@ void Play_Init(GameState* thisx) {
     // save the base scene layer (before accounting for the special cases below) to use later for the transition type
     baseSceneLayer = gSaveContext.sceneLayer;
 
-    if ((gEntranceTable[((void)0, gSaveContext.entranceIndex)].scene == SCENE_HYRULE_FIELD) && !LINK_IS_ADULT &&
+    if ((gEntranceTable[((void)0, gSaveContext.entranceIndex)].scene == SCENE_HYRULE_FIELD) && !FLEET_ERA_IS_ADULT &&
         !IS_CUTSCENE_LAYER) {
         if (CHECK_QUEST_ITEM(QUEST_KOKIRI_EMERALD) && CHECK_QUEST_ITEM(QUEST_GORON_RUBY) &&
             CHECK_QUEST_ITEM(QUEST_ZORA_SAPPHIRE)) {
@@ -502,8 +507,8 @@ void Play_Init(GameState* thisx) {
         } else {
             gSaveContext.sceneLayer = 0;
         }
-    } else if ((gEntranceTable[((void)0, gSaveContext.entranceIndex)].scene == SCENE_KOKIRI_FOREST) && LINK_IS_ADULT &&
-               !IS_CUTSCENE_LAYER) {
+    } else if ((gEntranceTable[((void)0, gSaveContext.entranceIndex)].scene == SCENE_KOKIRI_FOREST) &&
+               FLEET_ERA_IS_ADULT && !IS_CUTSCENE_LAYER) {
         gSaveContext.sceneLayer = (Flags_GetEventChkInf(EVENTCHKINF_USED_FOREST_TEMPLE_BLUE_WARP)) ? 3 : 2;
     }
 

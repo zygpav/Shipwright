@@ -43,6 +43,13 @@ namespace SohGui {
 extern std::shared_ptr<SohMenu> mSohMenu;
 using namespace UIWidgets;
 
+// Fleet Combo: which era the world shows, independent of Link's age.
+static const std::map<int32_t, const char*> fleetEraOptions = {
+    { -1, "Follow Link's age" },
+    { 0, "Child era (past)" },
+    { 1, "Adult era (future)" },
+};
+
 static std::map<int32_t, const char*> bunnyHoodEffectMap = {
     { BUNNY_HOOD_VANILLA, "Vanilla" },
     { BUNNY_HOOD_FAST, "Faster Run" },
@@ -202,6 +209,16 @@ void SohMenu::AddMenuEnhancements() {
     WidgetPath path = { "Enhancements", "Quality of Life", SECTION_COLUMN_1 };
     AddSidebarEntry("Enhancements", path.sidebarName, 3);
     path.column = SECTION_COLUMN_1;
+
+    AddWidget(path, "Fleet Combo", WIDGET_SEPARATOR_TEXT);
+    AddWidget(path, "World Era", WIDGET_CVAR_COMBOBOX)
+        .CVar("gFleetCombo.Era")
+        .Options(ComboboxOptions()
+                     .ComboMap(fleetEraOptions)
+                     .DefaultIndex(-1)
+                     .Tooltip("Which Hyrule you walk in. 'Follow Link's age' is the normal game. Lock it to the "
+                              "child or adult era, then change Link's age (Time Gate, Door of Time) to bring adult "
+                              "Link into the past or child Link into the future. Takes effect at the next area."));
 
     AddWidget(path, "Saving", WIDGET_SEPARATOR_TEXT);
     AddWidget(path, "Autosave", WIDGET_CVAR_CHECKBOX)

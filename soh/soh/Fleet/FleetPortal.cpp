@@ -44,6 +44,25 @@ std::optional<int32_t> EntranceForPortal(const std::string& portal) {
     if (portal == kMarketPortal) {
         return ENTR_MARKET_DAY_OUTSIDE_HAPPY_MASK_SHOP;
     }
+    // Fleet Combo: OoT warp songs played in Termina land on their Hyrule warp pads.
+    if (portal == "warp.minuet") {
+        return ENTR_SACRED_FOREST_MEADOW_WARP_PAD;
+    }
+    if (portal == "warp.bolero") {
+        return ENTR_DEATH_MOUNTAIN_CRATER_WARP_PAD;
+    }
+    if (portal == "warp.serenade") {
+        return ENTR_LAKE_HYLIA_WARP_PAD;
+    }
+    if (portal == "warp.requiem") {
+        return ENTR_DESERT_COLOSSUS_WARP_PAD;
+    }
+    if (portal == "warp.nocturne") {
+        return ENTR_GRAVEYARD_WARP_PAD;
+    }
+    if (portal == "warp.prelude") {
+        return ENTR_TEMPLE_OF_TIME_WARP_PAD;
+    }
     return FleetPassages_Entrance(portal);
 }
 

@@ -610,7 +610,12 @@ char* FleetRando_DumpStaticData(void) {
         Rando::ItemLocation* itemLocation = ctx->GetItemLocation(rc);
         RandomizerGet placed = itemLocation->GetPlacedRandomizerGet();
         if (placed == RG_NONE) {
-            checks.push_back({ { "name", name } });
+            // Fleet Combo: what the vanilla game keeps here, for the vanilla-placement fill.
+            const RandomizerGet vanilla = location->GetVanillaItem();
+            checks.push_back({ { "name", name },
+                               { "vanilla", ItemName(vanilla) },
+                               { "vanillaCategory", CategoryName(vanilla) },
+                               { "vanillaAdvancement", IsAdvancement(vanilla) } });
         } else {
             fixed.push_back({ { "check", name },
                               { "item", ItemName(placed) },

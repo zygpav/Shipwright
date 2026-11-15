@@ -73,10 +73,19 @@ static const OwlDestination sOwlDestinations[]={
     {"Hyrule Castle",ENTR_CASTLE_GROUNDS_SOUTH_EXIT,{-146,1619,2961},0},
     {"Lost Woods",ENTR_LOST_WOODS_SOUTH_EXIT,{955,210,-798},2}
 };
+// Fleet Combo: inside Fleet the owl menu ends with a flight to Termina (Clock Town).
+bool FleetGame_IsHosted(void);
+void FleetPortal_RequestDeparture(const char* portal);
+#define SOARING_TERMINA_PAGE 4
 static void ShowSoaringPage(void) {
     static char text[256];int first=sSoaringPage*2;
-    snprintf(text,sizeof(text),"Song of Soaring\x1C%%g%s&%s&%s%%w",sOwlDestinations[first].name,
-        sOwlDestinations[first+1].name,sSoaringPage<3?"More owl spots":"Cancel");
+    if(sSoaringPage==SOARING_TERMINA_PAGE) {
+        snprintf(text,sizeof(text),"Song of Soaring\x1B%%gTermina (Clock Town)&Cancel%%w");
+    } else {
+        const bool more=sSoaringPage<3||FleetGame_IsHosted();
+        snprintf(text,sizeof(text),"Song of Soaring\x1C%%g%s&%s&%s%%w",sOwlDestinations[first].name,
+            sOwlDestinations[first+1].name,more?"More owl spots":"Cancel");
+    }
     sCollectPrompt=sApi->ShowTextbox(gPlayState,text,false)?1:0;
 }
 static void WarpTo(s16 entrance,const OwlDestination* owl) {
@@ -122,7 +131,8 @@ static void CollectBehaviorsTick(void) {
     int prompt=sCollectPrompt,choice=play->msgCtx.choiceIndex;sCollectPrompt=0;
     Message_CloseTextbox(play);
     if(prompt==1) {
-        if(choice==2) {if(sSoaringPage<3){++sSoaringPage;ShowSoaringPage();}}
+        if(sSoaringPage==SOARING_TERMINA_PAGE) {if(choice==0)FleetPortal_RequestDeparture("market");}
+        else if(choice==2) {if(sSoaringPage<3||FleetGame_IsHosted()){++sSoaringPage;ShowSoaringPage();}}
         else {const OwlDestination* target=&sOwlDestinations[sSoaringPage*2+choice];WarpTo(target->entrance,target);}
     } else if(prompt==2 && choice<2) {
         s16 spawn=choice?ENTR_TEMPLE_OF_TIME_WARP_PAD:ENTR_LINKS_HOUSE_CHILD_SPAWN;

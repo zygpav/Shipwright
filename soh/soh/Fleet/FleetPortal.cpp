@@ -15,6 +15,8 @@
 #include "soh/ShipInit.hpp"
 #include "soh/SaveManager.h"
 #include "soh/Enhancements/randomizer/SeedContext.h"
+#include "soh/ModApi/Forms/FormRegistry.h"
+#include <libultraship/bridge/consolevariablebridge.h>
 
 extern "C" {
 #include "z64.h"
@@ -37,8 +39,22 @@ struct Arrival {
     int32_t entrance;
     int32_t slot;
     bool cross = false;
+    // Fleet Combo: the Link who crossed: "child"/"adult" and the form he wore (nei.* key), kept on this side.
+    std::string age;
+    std::string form;
 };
 std::optional<Arrival> sArrival;
+// Fleet Combo: a form to put on once the arrival scene has a player.
+std::string sPendingForm;
+
+bool DoorPortalsEnabled() {
+    return CVarGetInteger("gFleetCombo.DoorPortals", 0) != 0;
+}
+
+bool IsTransformationForm(const std::string& key) {
+    return key == SOH_FORM_KEY_DEKU || key == SOH_FORM_KEY_GORON || key == SOH_FORM_KEY_ZORA ||
+           key == SOH_FORM_KEY_FIERCE_DEITY;
+}
 
 std::optional<int32_t> EntranceForPortal(const std::string& portal) {
     if (portal == kMarketPortal) {
@@ -74,7 +90,12 @@ void Depart(const std::string& portal) {
     if (FleetRuntime_HasSession()) {
         FleetRuntime_Save();
     }
-    const std::string payload = nlohmann::json{ { "portal", portal }, { "slot", gSaveContext.fileNum } }.dump();
+    const char* form = FormRegistry_GetCurrentKey();
+    const std::string payload = nlohmann::json{ { "portal", portal },
+                                                { "slot", gSaveContext.fileNum },
+                                                { "age", LINK_IS_ADULT ? "adult" : "child" },
+                                                { "form", form != nullptr ? form : "" } }
+                                    .dump();
     const FleetDestination destination = { .game = nullptr, .entrance = 0, .payloadJson = payload.c_str() };
     FleetGame_RequestSwitch(&destination);
 }
@@ -104,6 +125,15 @@ void BootIntoPlay(const Arrival& arrival) {
         throw std::runtime_error("OoT save does not belong to this Fleet seed");
     }
     gSaveContext.gameMode = GAMEMODE_NORMAL;
+    // Fleet Combo: arrive as the Link who left the other world. The equipment of each age swaps like time travel.
+    if (!arrival.age.empty()) {
+        const int32_t age = arrival.age == "adult" ? LINK_AGE_ADULT : LINK_AGE_CHILD;
+        if (gSaveContext.linkAge != age) {
+            Inventory_SwapAgeEquipment();
+            gSaveContext.linkAge = age;
+        }
+    }
+    sPendingForm = IsTransformationForm(arrival.form) ? arrival.form : std::string{};
     SET_NEXT_GAMESTATE(gGameState, Play_Init, PlayState);
     FileChoose_PrepareLoadedSave(gGameState);
     if (arrival.entrance >= 0) {
@@ -137,8 +167,12 @@ void RegisterPortalHooks() {
     }
     GameInteractor::Instance->RegisterGameHook<GameInteractor::OnSceneInit>([](int16_t sceneNum) {
         FleetRuntime_ObserveScene(sceneNum);
-        if (sceneNum == SCENE_HAPPY_MASK_SHOP && gSaveContext.gameMode == GAMEMODE_NORMAL) {
+        if (sceneNum == SCENE_HAPPY_MASK_SHOP && gSaveContext.gameMode == GAMEMODE_NORMAL && DoorPortalsEnabled()) {
             sDeparture = kMarketPortal;
+        }
+        if (!sPendingForm.empty() && gSaveContext.gameMode == GAMEMODE_NORMAL) {
+            FormRegistry_ApplyActive(sPendingForm.c_str());
+            sPendingForm.clear();
         }
     });
 }
@@ -176,6 +210,8 @@ extern "C" void FleetPortal_Arrive(const FleetDestination* arrival) {
             sArrival = Arrival{ payload.at("entrance").get<int32_t>(), slot, true };
         } else if (const auto entrance = EntranceForPortal(payload.value("portal", ""))) {
             sArrival = Arrival{ *entrance, slot };
+            sArrival->age = payload.value("age", "");
+            sArrival->form = payload.value("form", "");
         }
         if (sArrival) {
             EnterArrival();

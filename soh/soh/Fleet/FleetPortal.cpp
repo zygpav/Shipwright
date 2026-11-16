@@ -13,6 +13,7 @@
 
 #include "soh/Enhancements/game-interactor/GameInteractor.h"
 #include "soh/ShipInit.hpp"
+#include "soh/cvar_prefixes.h"
 #include "soh/SaveManager.h"
 #include "soh/Enhancements/randomizer/SeedContext.h"
 #include "soh/ModApi/Forms/FormRegistry.h"
@@ -164,6 +165,11 @@ void RegisterPortalHooks() {
     FleetRuntime_Initialize();
     if (FleetRuntime_HasSession() && !sArrival) {
         sArrival = Arrival{ -1, FleetRuntime_Slot() };
+    }
+    // Fleet Combo: any Link uses every item (SoH's Timeless Equipment, which every age check here consults).
+    if (CVarGetInteger("gFleetCombo.AnyAgeItems", 1) != 0 && CVarGetInteger(CVAR_CHEAT("TimelessEquipment"), 0) == 0) {
+        CVarSetInteger(CVAR_CHEAT("TimelessEquipment"), 1);
+        ShipInit::Init(CVAR_CHEAT("TimelessEquipment"));
     }
     GameInteractor::Instance->RegisterGameHook<GameInteractor::OnSceneInit>([](int16_t sceneNum) {
         FleetRuntime_ObserveScene(sceneNum);

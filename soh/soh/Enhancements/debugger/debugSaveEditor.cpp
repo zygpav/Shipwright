@@ -1032,14 +1032,44 @@ static void DrawCustomEquipmentFlags() {
 }
 
 // Fleet Combo: every mod item Hyrule knows (NEI items, MM's items in Hyrule) in one searchable list.
+// Equipment (boots, tunics, the Cane of Byrna...) is owned through the equipment registry; items through the item one.
+static bool FleetComboIsEquipment(const SOHCustomItemDefinition* definition) {
+    return definition != nullptr && CustomEquipRegistry_Find(definition->key) != nullptr;
+}
+
+static bool FleetComboIsOwned(const SOHCustomItemDefinition* definition) {
+    return FleetComboIsEquipment(definition) ? CustomEquipRegistry_IsOwned(definition->key)
+                                             : CustomItemRegistry_IsOwned(definition->key);
+}
+
 static void FleetComboSetOwned(const SOHCustomItemDefinition* definition, bool owned) {
     if (definition == nullptr) {
         return;
     }
-    CustomItemRegistry_SetOwned(definition->key, owned);
-    if (CustomEquipRegistry_Find(definition->key) != nullptr) {
+    if (FleetComboIsEquipment(definition)) {
         CustomEquipRegistry_SetOwned(definition->key, owned);
+    } else {
+        CustomItemRegistry_SetOwned(definition->key, owned);
     }
+}
+
+// Where the pause menu shows it, so a given item can be found.
+static std::string FleetComboWhere(const SOHCustomItemDefinition* definition) {
+    if (FleetComboIsEquipment(definition)) {
+        return "Equipment screen";
+    }
+    SOHCustomItemPlacement placement = {};
+    if (!KaleidoItemManager_GetPlacement(definition->key, &placement)) {
+        return "Not in the menu";
+    }
+    if (CustomItemRegistry_IsQuestPage(placement.page)) {
+        return "Quest Status screen";
+    }
+    const std::string slot = "slot " + std::to_string(placement.slot + 1);
+    if (placement.page == SOH_ITEM_PAGE_VANILLA) {
+        return "Items, main page, " + slot;
+    }
+    return "Items, page " + std::to_string(placement.page) + " (press L), " + slot;
 }
 
 static const char* FleetComboGroup(const char* key) {
@@ -1053,6 +1083,9 @@ static const char* FleetComboGroup(const char* key) {
 static void DrawFleetComboItemsTab() {
     static ImGuiTextFilter filter;
     static int group = 0; // 0 all, 1 NEI, 2 Termina
+    ImGui::TextWrapped("Give items while Link is in the game (a file loaded). The 'Where' column says where the pause "
+                       "menu shows each one: extra item pages are reached with L, and items sharing a slot form a wheel "
+                       "(select it with A, then turn it with the stick).");
     ImGui::TextWrapped("Every NEI item and every Majora's Mask item that exists in Hyrule. Vanilla Ocarina of Time "
                        "items are in the Inventory, Equipment and Quest Status tabs. Majora's Mask's own Save Editor has "
                        "the same list for Termina (Mod Items & Equipment).");
@@ -1070,6 +1103,7 @@ static void DrawFleetComboItemsTab() {
         const std::string g = FleetComboGroup(definition->key);
         return group == 0 || (group == 1 && g == "NEI") || (group == 2 && g != "NEI");
     };
+    ImGui::BeginDisabled(gPlayState == nullptr);
     if (ImGui::Button("Give all shown")) {
         for (uint32_t i = 0; i < CustomItemRegistry_GetCount(); ++i) {
             if (visible(CustomItemRegistry_GetAt(i))) {
@@ -1085,15 +1119,17 @@ static void DrawFleetComboItemsTab() {
             }
         }
     }
+    ImGui::EndDisabled();
     if (CustomItemRegistry_GetCount() == 0) {
         ImGui::TextUnformatted("No mod items are loaded.");
         return;
     }
-    if (ImGui::BeginTable("FleetComboItems", 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY | ImGuiTableFlags_BordersInnerV,
+    if (ImGui::BeginTable("FleetComboItems", 4, ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY | ImGuiTableFlags_BordersInnerV,
                           ImVec2(0, ImGui::GetContentRegionAvail().y))) {
         ImGui::TableSetupColumn("Have", ImGuiTableColumnFlags_WidthFixed, 48.0f);
         ImGui::TableSetupColumn("Item");
         ImGui::TableSetupColumn("From", ImGuiTableColumnFlags_WidthFixed, 110.0f);
+        ImGui::TableSetupColumn("Where", ImGuiTableColumnFlags_WidthFixed, 230.0f);
         ImGui::TableHeadersRow();
         for (uint32_t i = 0; i < CustomItemRegistry_GetCount(); ++i) {
             const SOHCustomItemDefinition* definition = CustomItemRegistry_GetAt(i);
@@ -1103,10 +1139,12 @@ static void DrawFleetComboItemsTab() {
             ImGui::PushID(static_cast<int>(i));
             ImGui::TableNextRow();
             ImGui::TableNextColumn();
-            bool owned = CustomItemRegistry_IsOwned(definition->key);
+            bool owned = FleetComboIsOwned(definition);
+            ImGui::BeginDisabled(gPlayState == nullptr);
             if (ImGui::Checkbox("##owned", &owned)) {
                 FleetComboSetOwned(definition, owned);
             }
+            ImGui::EndDisabled();
             ImGui::TableNextColumn();
             const char* icon = CustomItemRegistry_ResolveTexture(definition->key, SOH_ITEM_ICON_SAVE_EDITOR);
             if (icon != nullptr) {
@@ -1119,6 +1157,8 @@ static void DrawFleetComboItemsTab() {
             }
             ImGui::TableNextColumn();
             ImGui::TextUnformatted(FleetComboGroup(definition->key));
+            ImGui::TableNextColumn();
+            ImGui::TextUnformatted(FleetComboWhere(definition).c_str());
             ImGui::PopID();
         }
         ImGui::EndTable();

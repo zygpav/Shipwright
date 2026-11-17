@@ -82,9 +82,9 @@ static void ShowSoaringPage(void) {
     if(sSoaringPage==SOARING_TERMINA_PAGE) {
         snprintf(text,sizeof(text),"Song of Soaring\x1B%%gTermina (Clock Town)&Cancel%%w");
     } else {
-        const bool more=sSoaringPage<3||FleetGame_IsHosted();
+        const char* last=sSoaringPage<3?"More owl spots":(FleetGame_IsHosted()?"To Termina...":"Cancel");
         snprintf(text,sizeof(text),"Song of Soaring\x1C%%g%s&%s&%s%%w",sOwlDestinations[first].name,
-            sOwlDestinations[first+1].name,more?"More owl spots":"Cancel");
+            sOwlDestinations[first+1].name,last);
     }
     sCollectPrompt=sApi->ShowTextbox(gPlayState,text,false)?1:0;
 }

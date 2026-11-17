@@ -188,6 +188,11 @@ void RegisterPortalHooks() {
         if (sceneNum == SCENE_HAPPY_MASK_SHOP && gSaveContext.gameMode == GAMEMODE_NORMAL && DoorPortalsEnabled()) {
             sDeparture = kMarketPortal;
         }
+        // Fleet Combo: Song of Soaring travels between the worlds, so every file inside Fleet knows it.
+        if (gSaveContext.gameMode == GAMEMODE_NORMAL && CustomItemRegistry_Find("mm.song.soaring") != nullptr &&
+            !CustomItemRegistry_IsOwned("mm.song.soaring")) {
+            CustomItemRegistry_SetOwned("mm.song.soaring", true);
+        }
         if (sPendingForm && gSaveContext.gameMode == GAMEMODE_NORMAL) {
             FormRegistry_ApplyActive(sPendingForm->empty() ? nullptr : sPendingForm->c_str());
             sPendingForm.reset();

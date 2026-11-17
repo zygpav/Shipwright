@@ -17,6 +17,7 @@
 #include "soh/SaveManager.h"
 #include "soh/Enhancements/randomizer/SeedContext.h"
 #include "soh/ModApi/Forms/FormRegistry.h"
+#include "soh/ModApi/CustomItemRegistry/CustomItemRegistry.h"
 #include <libultraship/bridge/consolevariablebridge.h>
 
 extern "C" {
@@ -45,8 +46,8 @@ struct Arrival {
     std::string form;
 };
 std::optional<Arrival> sArrival;
-// Fleet Combo: a form to put on once the arrival scene has a player.
-std::string sPendingForm;
+// Fleet Combo: the form to wear once the arrival scene has a player; "" = plain Link. Unset = leave it alone.
+std::optional<std::string> sPendingForm;
 
 bool DoorPortalsEnabled() {
     return CVarGetInteger("gFleetCombo.DoorPortals", 0) != 0;
@@ -55,6 +56,15 @@ bool DoorPortalsEnabled() {
 bool IsTransformationForm(const std::string& key) {
     return key == SOH_FORM_KEY_DEKU || key == SOH_FORM_KEY_GORON || key == SOH_FORM_KEY_ZORA ||
            key == SOH_FORM_KEY_FIERCE_DEITY;
+}
+
+// A form is only kept across worlds when this world has its mask too: without it Link could not take it off.
+bool CanWearForm(const std::string& key) {
+    if (!IsTransformationForm(key)) {
+        return false;
+    }
+    const SOHFormDefinition* form = FormRegistry_Find(key.c_str());
+    return form != nullptr && (form->item == nullptr || form->item[0] == '\0' || CustomItemRegistry_IsOwned(form->item));
 }
 
 std::optional<int32_t> EntranceForPortal(const std::string& portal) {
@@ -134,7 +144,9 @@ void BootIntoPlay(const Arrival& arrival) {
             gSaveContext.linkAge = age;
         }
     }
-    sPendingForm = IsTransformationForm(arrival.form) ? arrival.form : std::string{};
+    if (!arrival.age.empty()) {
+        sPendingForm = CanWearForm(arrival.form) ? arrival.form : std::string{};
+    }
     SET_NEXT_GAMESTATE(gGameState, Play_Init, PlayState);
     FileChoose_PrepareLoadedSave(gGameState);
     if (arrival.entrance >= 0) {
@@ -176,9 +188,9 @@ void RegisterPortalHooks() {
         if (sceneNum == SCENE_HAPPY_MASK_SHOP && gSaveContext.gameMode == GAMEMODE_NORMAL && DoorPortalsEnabled()) {
             sDeparture = kMarketPortal;
         }
-        if (!sPendingForm.empty() && gSaveContext.gameMode == GAMEMODE_NORMAL) {
-            FormRegistry_ApplyActive(sPendingForm.c_str());
-            sPendingForm.clear();
+        if (sPendingForm && gSaveContext.gameMode == GAMEMODE_NORMAL) {
+            FormRegistry_ApplyActive(sPendingForm->empty() ? nullptr : sPendingForm->c_str());
+            sPendingForm.reset();
         }
     });
 }

@@ -612,9 +612,11 @@ char* FleetRando_DumpStaticData(void) {
         if (placed == RG_NONE) {
             // Fleet Combo: what the vanilla game keeps here, for the vanilla-placement fill.
             const RandomizerGet vanilla = location->GetVanillaItem();
+            // Randomizer-only checks have no vanilla item: the host gives them junk and keeps NEI items out.
+            const bool hasVanilla = vanilla != RG_NONE;
             checks.push_back({ { "name", name },
-                               { "vanilla", ItemName(vanilla) },
-                               { "vanillaCategory", CategoryName(vanilla) },
+                               { "vanilla", hasVanilla ? ItemName(vanilla) : std::string{} },
+                               { "vanillaCategory", hasVanilla ? CategoryName(vanilla) : "none" },
                                { "vanillaAdvancement", IsAdvancement(vanilla) } });
         } else {
             fixed.push_back({ { "check", name },

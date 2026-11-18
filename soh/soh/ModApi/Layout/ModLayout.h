@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -55,6 +56,9 @@ bool ModLayout_BeginCustomEquip(struct PlayState* play, const char* key, uint8_t
 void ModLayout_CompleteCustomEquip(struct PlayState* play);
 const char* ModLayout_GetEquipIcon(void);
 bool ModLayout_HasMods(void);
+// Fleet Combo: describe where the pause menu shows an item; open the menu on its page next time.
+bool ModLayout_DescribeItem(const char* key, char* buffer, size_t size);
+bool ModLayout_ShowItem(const char* key);
 void ModLayout_Init(void);
 
 #ifdef __cplusplus

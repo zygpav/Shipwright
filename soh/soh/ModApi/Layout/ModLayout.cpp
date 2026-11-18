@@ -1,3 +1,4 @@
+#include <cstdio>
 #include "ModLayout.h"
 
 #include <algorithm>
@@ -1238,6 +1239,50 @@ bool ModLayout_DrawPage(PlayState* play, uint8_t kind) {
         DrawItemCellWheels(play, page, entries);
     }
     CLOSE_DISPS(play->state.gfxCtx);
+    return true;
+}
+
+// Fleet Combo: where the pause menu really shows an item (or equipment), and a way to open the menu on that page.
+static bool FindLayoutEntry(const char* key, uint8_t* kindOut, Entry* entryOut) {
+    if (key == nullptr) {
+        return false;
+    }
+    for (uint8_t kind = 0; kind < SOH_LAYOUT_COUNT; ++kind) {
+        for (auto& entry : Entries(kind)) {
+            if (entry.key == key) {
+                *kindOut = kind;
+                *entryOut = std::move(entry);
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+bool ModLayout_DescribeItem(const char* key, char* buffer, size_t size) {
+    uint8_t kind = 0;
+    Entry entry;
+    if (buffer == nullptr || size == 0 || !FindLayoutEntry(key, &kind, &entry)) {
+        return false;
+    }
+    const auto pages = Pages(kind, Entries(kind));
+    const auto& page = FindPage(pages, entry.placement.page);
+    const std::string where = std::string(KindNames[kind]) + ", " +
+                              (page.key == NativePage ? std::string("main page") : page.title + " (press L)") +
+                              ", cell " + std::to_string(entry.placement.cell + 1);
+    std::snprintf(buffer, size, "%s", where.c_str());
+    return true;
+}
+
+bool ModLayout_ShowItem(const char* key) {
+    uint8_t kind = 0;
+    Entry entry;
+    if (!FindLayoutEntry(key, &kind, &entry)) {
+        return false;
+    }
+    sShown[kind] = entry.placement.page;
+    sCursor[kind] = entry.placement.cell;
+    sCycling[kind] = false;
     return true;
 }
 

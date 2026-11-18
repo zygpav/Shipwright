@@ -25,6 +25,7 @@
 #include "soh/ModApi/Layout/ModLayout.h"
 #include "soh/ResourceManagerHelpers.h"
 #include "soh/Enhancements/game-interactor/GameInteractor.h"
+#include "soh/Fleet/FleetGame.h"
 
 #include <unordered_set>
 
@@ -1055,6 +1056,10 @@ static void FleetComboSetOwned(const SOHCustomItemDefinition* definition, bool o
 
 // Where the pause menu shows it, so a given item can be found.
 static std::string FleetComboWhere(const SOHCustomItemDefinition* definition) {
+    char where[160] = {};
+    if (ModLayout_DescribeItem(definition->key, where, sizeof(where))) {
+        return where;
+    }
     if (FleetComboIsEquipment(definition)) {
         return "Equipment screen";
     }
@@ -1124,12 +1129,15 @@ static void DrawFleetComboItemsTab() {
         ImGui::TextUnformatted("No mod items are loaded.");
         return;
     }
-    if (ImGui::BeginTable("FleetComboItems", 4, ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY | ImGuiTableFlags_BordersInnerV,
+    ImGui::TextWrapped("Tip: 'Show' opens the pause menu on that item's page the next time you pause. Extra pages "
+                       "are otherwise reached with the L button (Z if the GameCube page switcher is on).");
+    if (ImGui::BeginTable("FleetComboItems", 5, ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY | ImGuiTableFlags_BordersInnerV,
                           ImVec2(0, ImGui::GetContentRegionAvail().y))) {
         ImGui::TableSetupColumn("Have", ImGuiTableColumnFlags_WidthFixed, 48.0f);
         ImGui::TableSetupColumn("Item");
         ImGui::TableSetupColumn("From", ImGuiTableColumnFlags_WidthFixed, 110.0f);
-        ImGui::TableSetupColumn("Where", ImGuiTableColumnFlags_WidthFixed, 230.0f);
+        ImGui::TableSetupColumn("Where", ImGuiTableColumnFlags_WidthFixed, 260.0f);
+        ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 56.0f);
         ImGui::TableHeadersRow();
         for (uint32_t i = 0; i < CustomItemRegistry_GetCount(); ++i) {
             const SOHCustomItemDefinition* definition = CustomItemRegistry_GetAt(i);
@@ -1159,6 +1167,12 @@ static void DrawFleetComboItemsTab() {
             ImGui::TextUnformatted(FleetComboGroup(definition->key));
             ImGui::TableNextColumn();
             ImGui::TextUnformatted(FleetComboWhere(definition).c_str());
+            ImGui::TableNextColumn();
+            ImGui::BeginDisabled(!owned);
+            if (ImGui::SmallButton("Show")) {
+                ModLayout_ShowItem(definition->key);
+            }
+            ImGui::EndDisabled();
             ImGui::PopID();
         }
         ImGui::EndTable();
@@ -3029,7 +3043,10 @@ void SaveEditorWindow::DrawElement() {
             ImGui::EndTabItem();
         }
 
-        GameInteractor::Instance->ExecuteHooks<GameInteractor::OnSaveEditorTabs>(&gSaveContext);
+        // Fleet Combo: the Fleet Combo tab covers every mod's items; skip the per-mod tabs.
+        if (!FleetGame_IsHosted()) {
+            GameInteractor::Instance->ExecuteHooks<GameInteractor::OnSaveEditorTabs>(&gSaveContext);
+        }
         ImGui::EndTabBar();
     }
 

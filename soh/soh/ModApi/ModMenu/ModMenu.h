@@ -58,6 +58,10 @@ bool ModUI_InputInt(const char* label, int32_t* value);
 
 #ifdef __cplusplus
 }
+#include <string>
+#include <vector>
+// Fleet Combo test mode: the gathered NEI/Dev Tools pages, one line per mod section and setting.
+void ModMenu_Describe(std::vector<std::string>& lines);
 #endif
 
 #endif

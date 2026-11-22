@@ -487,6 +487,19 @@ bool ModMenu_RegisterWidgetAt(const SOHModMenuWidget* widget, const char* anchor
     return StoreWidget(widget, anchor, after);
 }
 
+void ModMenu_Describe(std::vector<std::string>& lines) {
+    for (const auto& page : sGatheredPages) {
+        lines.push_back("gathered " + page.section + " > " + page.sidebar);
+        for (const auto& group : page.groups) {
+            lines.push_back("  section " + group.name + " (" + std::to_string(group.widgets.size()) + ")");
+            for (const auto* widget : group.widgets) {
+                lines.push_back("    " + std::to_string(static_cast<int>(widget->definition.type)) + " " + widget->label +
+                                (widget->cvar.empty() ? "" : " {" + widget->cvar + "}"));
+            }
+        }
+    }
+}
+
 bool ModUI_BeginTab(const char* label) {
     return label != nullptr && ImGui::BeginTabItem(label);
 }

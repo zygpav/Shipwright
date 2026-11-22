@@ -30,6 +30,8 @@ class Menu : public GuiWindow {
     void AddMenuEntry(std::string entryName, const char* entryCvar);
     void AddSearchWidget(SearchWidget widget);
     std::unordered_map<uint32_t, disabledInfo>& GetDisabledMap();
+    // Fleet Combo test mode: every header, sidebar and widget, one line each.
+    void Describe(std::vector<std::string>& lines);
 
   protected:
     ImVec2 mOriginalSize;

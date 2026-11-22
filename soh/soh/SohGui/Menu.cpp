@@ -969,4 +969,26 @@ void Menu::DrawElement() {
     }
     ImGui::End();
 }
+void Menu::Describe(std::vector<std::string>& lines) {
+    for (const auto& label : menuOrder) {
+        auto entry = menuEntries.find(label);
+        if (entry == menuEntries.end()) {
+            continue;
+        }
+        lines.push_back("header " + label);
+        for (const auto& sidebarName : entry->second.sidebarOrder) {
+            auto sidebar = entry->second.sidebars.find(sidebarName);
+            if (sidebar == entry->second.sidebars.end()) {
+                continue;
+            }
+            lines.push_back("  sidebar " + sidebarName + " (" + std::to_string(sidebar->second.columnCount) + " cols)");
+            for (size_t column = 0; column < sidebar->second.columnWidgets.size(); ++column) {
+                for (const auto& widget : sidebar->second.columnWidgets[column]) {
+                    lines.push_back("    [" + std::to_string(column) + "] " +
+                                    std::to_string(static_cast<int>(widget.type)) + " " + widget.name);
+                }
+            }
+        }
+    }
+}
 } // namespace Ship

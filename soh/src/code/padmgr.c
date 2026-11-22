@@ -1,3 +1,4 @@
+#include "soh/Fleet/FleetTest.h"
 #include "global.h"
 #include "vt.h"
 #include <string.h>
@@ -317,6 +318,7 @@ void PadMgr_HandleRetraceMsg(PadMgr* padMgr) {
     }
     osRecvMesg(queue, NULL, OS_MESG_BLOCK);
     osContGetReadData(padMgr->pads);
+    FleetTest_InjectPad(&padMgr->pads[0]); // Fleet Combo test mode; no-op otherwise
 
     Mouse_UpdateAll();
 

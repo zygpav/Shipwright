@@ -991,4 +991,7 @@ void Menu::Describe(std::vector<std::string>& lines) {
         }
     }
 }
+void Menu::RemoveMenuEntry(const std::string& entryName) {
+    menuOrder.erase(std::remove(menuOrder.begin(), menuOrder.end(), entryName), menuOrder.end());
+}
 } // namespace Ship

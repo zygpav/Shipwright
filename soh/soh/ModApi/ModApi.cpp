@@ -4,6 +4,7 @@
 #include <cmath>
 #include <fast/Fast3dWindow.h>
 #include <fast/interpreter.h>
+#include <map>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -564,6 +565,24 @@ bool ModApi_WriteRegistry(const std::filesystem::path& path) {
 
 std::string ModApi_GetCurrentMod() {
     return sCurrentMod;
+}
+
+namespace {
+std::map<std::string, std::string>& ModDisplayNames() {
+    static std::map<std::string, std::string> names;
+    return names;
+}
+} // namespace
+
+void ModApi_SetModDisplayName(const std::string& name, const std::string& displayName) {
+    if (!name.empty() && !displayName.empty()) {
+        ModDisplayNames()[name] = displayName;
+    }
+}
+
+std::string ModApi_GetModDisplayName(const std::string& name) {
+    auto found = ModDisplayNames().find(name);
+    return found != ModDisplayNames().end() ? found->second : name;
 }
 
 const SOHModApi* ModApi_Get() {

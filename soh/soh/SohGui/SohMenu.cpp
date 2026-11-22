@@ -147,6 +147,11 @@ void SohMenu::AddMenuElements() {
         initFunc();
     }
 
+    // Fleet Combo: online play and the mod store do not apply to the combined game.
+    if (FleetGame_IsHosted()) {
+        RemoveMenuEntry("Network");
+    }
+
     mMenuElementsInitialized = true;
 }
 

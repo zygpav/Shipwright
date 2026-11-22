@@ -1,4 +1,5 @@
 #include "ModMenu.h"
+#include "soh/ModApi/ModApi.h"
 
 #include <algorithm>
 #include <cstring>
@@ -217,14 +218,18 @@ struct MenuHome {
 };
 
 MenuHome RemapModMenu(const std::string& section, const std::string& sidebar) {
-    if (section != "Mods") {
+    // Mods put their pages under "Mods" (Ship) or "Enhancements" (2Ship); the menu's own pages never come through here.
+    if (section != "Mods" && section != "Enhancements") {
         return { section, sidebar, "" };
     }
     static const std::map<std::string, std::string> kCategory = {
         { "Majora's Mask", "Items & Masks" },  { "Ocarina of Time", "Items & Masks" }, { "Items", "Items & Masks" },
         { "Equipment", "Equipment" },          { "Ikana Shield", "Equipment" },        { "Partners", "Companions" },
-        { "Companions", "Companions" },        { "Gameplay", "Gameplay" },
+        { "Companions", "Companions" },        { "Gameplay", "Gameplay" },         { "Turbo", "Gameplay" },
     };
+    if (sidebar == "Cel Shading" || sidebar == "PAK Loader") {
+        return { "NEI", "Visuals", sidebar };
+    }
     if (sidebar == "Item Drop Tester" || sidebar == "Animation Viewer" || sidebar == "Debug") {
         return { "Dev Tools", "Mod Tools", sidebar };
     }
@@ -386,6 +391,14 @@ void EnsureSidebar(const std::string& section, const std::string& sidebar, const
     }
 }
 
+GatheredPage& AddGatheredPage(const std::string& section, const std::string& sidebar) {
+    sGatheredPages.push_back({ section, sidebar, {} });
+    GatheredPage* page = &sGatheredPages.back();
+    EnsureSidebar(section, sidebar, "gFleetCombo.Menu." + section + "Page");
+    AddCustomPageWidget(section, sidebar, [page]() { DrawGatheredPage(*page); });
+    return *page;
+}
+
 GatheredPage& GetGatheredPage(const std::string& section, const std::string& sidebar) {
     for (auto& page : sGatheredPages) {
         if (page.section == section && page.sidebar == sidebar) {
@@ -393,25 +406,31 @@ GatheredPage& GetGatheredPage(const std::string& section, const std::string& sid
         }
     }
     const std::string cvar = "gFleetCombo.Menu." + section + "Page";
-    if (section == "NEI" && sGatheredPages.empty()) {
+    if (section == "NEI" && std::none_of(sGatheredPages.begin(), sGatheredPages.end(),
+                                         [](const auto& existing) { return existing.section == "NEI"; })) {
+        // The section's pages in a fixed order, whichever mod loads first; "Other" comes last, when needed.
         EnsureSidebar("NEI", "Fleet Combo", cvar);
         AddCustomPageWidget("NEI", "Fleet Combo", DrawFleetComboPage);
+        for (const char* category : { "Items & Masks", "Equipment", "Gameplay", "Companions", "Visuals" }) {
+            if (category != sidebar) {
+                AddGatheredPage("NEI", category);
+            }
+        }
     }
-    sGatheredPages.push_back({ section, sidebar, {} });
-    GatheredPage* page = &sGatheredPages.back();
-    EnsureSidebar(section, sidebar, cvar);
-    AddCustomPageWidget(section, sidebar, [page]() { DrawGatheredPage(*page); });
-    return *page;
+    return AddGatheredPage(section, sidebar);
 }
 
 void GatherWidget(const MenuHome& home, RegisteredWidget registered) {
     GatheredPage& page = GetGatheredPage(home.section, home.sidebar);
+    // One section per mod, named as the mod names itself; settings registered outside a mod keep their sidebar.
+    const std::string mod = ModApi_GetCurrentMod();
+    const std::string groupName = mod.empty() ? home.header : ModApi_GetModDisplayName(mod);
     auto group = std::find_if(page.groups.begin(), page.groups.end(),
-                              [&](const auto& existing) { return existing.name == home.header; });
+                              [&](const auto& existing) { return existing.name == groupName; });
     if (group == page.groups.end()) {
-        page.groups.push_back({ home.header, {} });
+        page.groups.push_back({ groupName, {} });
         group = std::prev(page.groups.end());
-        SPDLOG_WARN("[ModMenu] {} > {} > {}", home.section, home.sidebar, home.header);
+        SPDLOG_WARN("[ModMenu] {} > {} > {}", home.section, home.sidebar, groupName);
     }
     sGatheredWidgets.push_back(std::move(registered));
     RegisteredWidget* stored = &sGatheredWidgets.back();

@@ -822,6 +822,23 @@ void FileChoose_UpdateQuestMenu(GameState* thisx) {
         GameInteractor_ExecuteOnUpdateFileQuestSelection(this->questType[this->buttonIndex]);
     }
 
+    // Fleet Combo: the plain quest is the combined game. Picking it prepares the combined seed (vanilla items in
+    // vanilla places, NEI items shuffled) and goes straight to the name, so no file is ever created without it.
+    if (CHECK_BTN_ALL(input->press.button, BTN_A) && FleetGame_IsHosted() &&
+        this->questType[this->buttonIndex] == QUEST_NORMAL) {
+        if (FleetGame_GenerateRandomizer(this->buttonIndex) && FleetGame_HasGeneratedSeed(this->buttonIndex)) {
+            this->questType[this->buttonIndex] = QUEST_RANDOMIZER;
+            gSaveContext.ship.quest.id = QUEST_RANDOMIZER;
+            Audio_PlaySfxGeneral(NA_SE_SY_FSEL_DECIDE_L, &gSfxDefaultPos, 4, &gSfxDefaultFreqAndVolScale,
+                                 &gSfxDefaultFreqAndVolScale, &gSfxDefaultReverb);
+            FileChoose_StartNameEntryFromMenu(this);
+            this->logoAlpha = 0;
+            return;
+        }
+        Sfx_PlaySfxCentered(NA_SE_SY_OCARINA_ERROR);
+        return;
+    }
+
     if (CHECK_BTN_ALL(input->press.button, BTN_A)) {
         gSaveContext.ship.quest.id = this->questType[this->buttonIndex];
 

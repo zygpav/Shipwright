@@ -18,6 +18,7 @@
 #include <ship/window/gui/Gui.h>
 #include <ship/window/gui/ConsoleWindow.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <sstream>
@@ -273,6 +274,18 @@ void Run(const std::string& line) {
         std::string value;
         args >> value;
         gSaveContext.health = static_cast<s16>(ParseNumber(value));
+    } else if (verb == "textbox") {
+        if (gPlayState != nullptr) {
+            CustomItemRegistry_ShowTextbox(gPlayState, rest.c_str(), false);
+        }
+    } else if (verb == "magic") {
+        std::string value;
+        args >> value;
+        gSaveContext.isMagicAcquired = true;
+        gSaveContext.magicLevel = std::max<s8>(gSaveContext.magicLevel, 1);
+        gSaveContext.magicCapacity = gSaveContext.magicLevel * 48;
+        gSaveContext.magic = static_cast<s8>(std::min<long>(ParseNumber(value), gSaveContext.magicCapacity));
+        Report("magic " + std::to_string(gSaveContext.magic));
     } else if (verb == "file") {
         std::string slot;
         args >> slot;

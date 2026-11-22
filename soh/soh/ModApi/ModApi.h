@@ -261,6 +261,9 @@ std::filesystem::path ModLoader_GetModsDirectory();
 void ModApi_SetCurrentMod(const std::string& name);
 void ModApi_ClearCurrentMod();
 std::string ModApi_GetCurrentMod();
+// The name a mod shows players (its manifest's display_name), or its key when it has none.
+void ModApi_SetModDisplayName(const std::string& name, const std::string& displayName);
+std::string ModApi_GetModDisplayName(const std::string& name);
 std::string ModApi_GetCatalogFingerprint();
 // SOH [Unbound] Writes what mods registered in C (items, actor types) as JSON for tools such as Nocturne.
 bool ModApi_WriteRegistry(const std::filesystem::path& path);

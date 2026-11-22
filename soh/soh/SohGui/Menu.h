@@ -32,6 +32,8 @@ class Menu : public GuiWindow {
     std::unordered_map<uint32_t, disabledInfo>& GetDisabledMap();
     // Fleet Combo test mode: every header, sidebar and widget, one line each.
     void Describe(std::vector<std::string>& lines);
+    // Fleet Combo: takes a header off the top bar (its sidebars stay registered).
+    void RemoveMenuEntry(const std::string& entryName);
 
   protected:
     ImVec2 mOriginalSize;

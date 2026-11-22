@@ -414,6 +414,9 @@ std::optional<NativeModPackage> ReadNativeModPackage(const std::shared_ptr<Ship:
     const std::string binaryPath = binaryEntry->get<std::string>();
     const std::string fallbackName = std::filesystem::path(archive->GetPath()).stem().string();
     package.name = manifest.value("name", fallbackName);
+    if (manifest.contains("display_name") && manifest["display_name"].is_string()) {
+        ModApi_SetModDisplayName(package.name, manifest["display_name"].get<std::string>());
+    }
     package.archivePath = archive->GetPath();
     auto file = archive->LoadFile(binaryPath);
     if (file == nullptr || !file->IsLoaded || file->Buffer == nullptr) {

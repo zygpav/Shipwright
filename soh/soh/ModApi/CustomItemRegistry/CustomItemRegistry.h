@@ -237,6 +237,8 @@ uint32_t CustomItemRegistry_GetCount(void);
 const SOHCustomItemDefinition* CustomItemRegistry_GetAt(uint32_t index);
 bool CustomItemRegistry_SetOwned(const char* key, bool owned);
 void CustomItemRegistry_ReceiveGetItem(const char* key);
+// Receives every copy the item is shuffled as (pieces, progressive stages), as if each were found. Testing tools.
+void CustomItemRegistry_ReceiveCopies(const char* key);
 bool CustomItemRegistry_IsOwned(const char* key);
 bool CustomItemRegistry_SetWorn(const char* key, bool worn);
 bool CustomItemRegistry_IsWorn(const char* key);

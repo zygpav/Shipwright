@@ -1049,6 +1049,10 @@ static void FleetComboSetOwned(const SOHCustomItemDefinition* definition, bool o
     }
     if (FleetComboIsEquipment(definition)) {
         CustomEquipRegistry_SetOwned(definition->key, owned);
+    } else if (owned && !CustomItemRegistry_IsOwned(definition->key)) {
+        // Received the way a chest gives it, once per copy: items found in pieces (Ultrahand) or in stages
+        // (Roc's Feather, upgrades) count what they received, so owning the key alone leaves them unusable.
+        CustomItemRegistry_ReceiveCopies(definition->key);
     } else {
         CustomItemRegistry_SetOwned(definition->key, owned);
     }

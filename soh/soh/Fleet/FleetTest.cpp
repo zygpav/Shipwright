@@ -75,7 +75,14 @@ bool IsOwned(const char* key) {
 }
 
 bool SetOwned(const char* key, bool owned) {
-    return IsEquipment(key) ? CustomEquipRegistry_SetOwned(key, owned) : CustomItemRegistry_SetOwned(key, owned);
+    if (IsEquipment(key)) {
+        return CustomEquipRegistry_SetOwned(key, owned);
+    }
+    if (owned && !CustomItemRegistry_IsOwned(key)) {
+        CustomItemRegistry_ReceiveCopies(key);
+        return CustomItemRegistry_IsOwned(key);
+    }
+    return CustomItemRegistry_SetOwned(key, owned);
 }
 
 long ParseNumber(const std::string& text) {

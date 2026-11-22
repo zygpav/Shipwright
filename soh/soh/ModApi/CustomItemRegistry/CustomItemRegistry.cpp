@@ -1,4 +1,5 @@
 #include "CustomItemRegistry.h"
+#include "soh/ModApi/RandoOptions/RandoOptions.h"
 #include "soh/ModApi/ProgressiveItems/ProgressiveItems.h"
 
 #include <array>
@@ -933,6 +934,25 @@ void CustomItemRegistry_ReceiveGetItem(const char* key) {
         definition->onReceive(key);
     }
     GameInteractor::Instance->ExecuteHooks<GameInteractor::OnCustomItemReceive>(key);
+}
+
+void CustomItemRegistry_ReceiveCopies(const char* key) {
+    const auto* definition = CustomItemRegistry_Find(key);
+    if (definition == nullptr) {
+        return;
+    }
+    int copies = 1;
+    const SOHCustomItemRandomizer* randomizer = definition->randomizer;
+    if (randomizer != nullptr && (randomizer->flags & SOH_CUSTOM_ITEM_RANDO_PROGRESSIVE) != 0) {
+        copies = std::max<int>(randomizer->poolCount, 1);
+        if (randomizer->poolCountOption != nullptr && randomizer->poolCountOption[0] != '\0') {
+            copies = randomizer->poolCount + RandoOptions_Get(randomizer->poolCountOption);
+        }
+    }
+    copies = std::clamp(copies, 1, 16);
+    for (int copy = 0; copy < copies; ++copy) {
+        CustomItemRegistry_ReceiveGetItem(key);
+    }
 }
 
 bool CustomItemRegistry_IsOwned(const char* key) {

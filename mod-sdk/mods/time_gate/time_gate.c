@@ -112,13 +112,18 @@ static void ReleasePlayer(Player* player, PlayState* play) {
     ResetGate();
 }
 
+// Without a magic meter yet the gate is free: Link can find it long before the Great Fairy, and in Fleet Combo
+// changing age is how the other era is reached at all.
 static bool HasMagicForGate(void) {
-    return gSaveContext.isMagicAcquired && gSaveContext.magic >= TIME_GATE_MAGIC_COST;
+    return !gSaveContext.isMagicAcquired || gSaveContext.magic >= TIME_GATE_MAGIC_COST;
 }
 
 // The meter drains over several frames and the travel reloads the scene in this one, so the cost is settled
 // by hand: asking the interface for it would give the magic back with the scene.
 static void SpendMagic(PlayState* play) {
+    if (!gSaveContext.isMagicAcquired) {
+        return;
+    }
     if (Magic_RequestChange(play, TIME_GATE_MAGIC_COST, MAGIC_CONSUME_NOW)) {
         gSaveContext.magic = gSaveContext.magicTarget;
     }

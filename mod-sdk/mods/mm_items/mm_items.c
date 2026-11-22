@@ -693,7 +693,7 @@ static void DiscardPhoto(void) {
 
 static void UpdatePhotoPrompt(Player* player, PlayState* play) {
     if (!sIsPromptShown) {
-        sIsPromptShown = sApi->ShowTextbox(play, "Keep this pictograph?\x1B%g&&Yes&No%w", false);
+        sIsPromptShown = sApi->ShowTextbox(play, "Keep this pictograph?&\x1B%gYes&No%w", false);
         return;
     }
     if (Message_GetState(&play->msgCtx) != TEXT_STATE_CHOICE || !Message_ShouldAdvance(play)) {

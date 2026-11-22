@@ -311,7 +311,7 @@ static void DrawDisabledWarpChoice(void) {
     gDPSetCombineLERP(OVERLAY_DISP++, 0,0,0,PRIMITIVE, TEXEL0,0,PRIMITIVE,0,
                      0,0,0,PRIMITIVE, TEXEL0,0,PRIMITIVE,0);
     msg->textPosX=R_TEXT_INIT_XPOS+32;
-    msg->textPosY=R_TEXT_INIT_YPOS+2*R_TEXT_LINE_SPACING;
+    msg->textPosY=R_TEXT_INIT_YPOS+R_TEXT_LINE_SPACING; // second of the three choice lines
     msg->textColorR=msg->textColorG=msg->textColorB=128;
     msg->textColorAlpha=255;
     for (int i=0; sDisabledLabel[i]; ++i) {
@@ -352,8 +352,8 @@ static void ResolveWarpPrompt(Player* player, PlayState* play) {
 
 static void OpenWarpPrompt(PlayState* play, uint8_t stone) {
     const char* text=IsStoneWarpReady(stone)
-        ? "What do you want to do?\x1C&%gNew Warp Point&Go to Warp Point&Nothing%w"
-        : "What do you want to do?\x1C&%gNew Warp Point& &Nothing%w";
+        ? "\x1C%gNew Warp Point&Go to Warp Point&Nothing%w"
+        : "\x1C%gNew Warp Point& &Nothing%w";
     if (!sApi->ShowTextbox(play,text,false)) return;
     sPendingWarpStone=(int8_t)stone;
     sWarpPromptTextId=play->msgCtx.textId;

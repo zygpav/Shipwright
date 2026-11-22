@@ -77,17 +77,21 @@ static const OwlDestination sOwlDestinations[]={
 bool FleetGame_IsHosted(void);
 void FleetPortal_RequestDeparture(const char* portal);
 #define SOARING_TERMINA_PAGE 4
+// A three-way choice fills the box's first three lines, so it has no title line: the song is named by the
+// textbox that recognised it.
 static void ShowSoaringPage(void) {
     static char text[256];int first=sSoaringPage*2;
     if(sSoaringPage==SOARING_TERMINA_PAGE) {
-        snprintf(text,sizeof(text),"Song of Soaring\x1B%%gTermina (Clock Town)&Cancel%%w");
+        snprintf(text,sizeof(text),"\x1C%%gTermina (Clock Town)&Back to the first owl spots&Cancel%%w");
     } else {
         const char* last=sSoaringPage<3?"More owl spots":(FleetGame_IsHosted()?"To Termina...":"Cancel");
-        snprintf(text,sizeof(text),"Song of Soaring\x1C%%g%s&%s&%s%%w",sOwlDestinations[first].name,
+        snprintf(text,sizeof(text),"\x1C%%g%s&%s&%s%%w",sOwlDestinations[first].name,
             sOwlDestinations[first+1].name,last);
     }
     sCollectPrompt=sApi->ShowTextbox(gPlayState,text,false)?1:0;
 }
+// A prompt to open once the previous textbox has finished closing.
+static int sQueuedPrompt;
 static void WarpTo(s16 entrance,const OwlDestination* owl) {
     PlayState* play=gPlayState;
     if(owl!=NULL) {
@@ -104,7 +108,7 @@ static void ApplyRecognizedSong(int index) {
     if(index==3)SummonElegy();
     else if(index==6) {sSoaringPage=0;ShowSoaringPage();}
     else if(index==7) {
-        sCollectPrompt=sApi->ShowTextbox(gPlayState,"Fugue of Home\x1C%gChild spawn&Adult spawn&Cancel%w",false)?2:0;
+        sCollectPrompt=sApi->ShowTextbox(gPlayState,"\x1C%gFugue of Home: child spawn&Fugue of Home: adult spawn&Cancel%w",false)?2:0;
     }
 }
 static void QueueRecognizedSong(int index) {
@@ -123,16 +127,26 @@ static void CollectBehaviorsTick(void) {
         if(poly!=NULL && floor>BGCHECK_Y_MIN)player->actor.world.pos.y=floor;
         sLandingPending=false;
     }
+    if(sQueuedPrompt && Message_GetState(&play->msgCtx)==TEXT_STATE_NONE) {
+        sQueuedPrompt=0;ShowSoaringPage();return;
+    }
     if(!sCollectPrompt)return;
-    if(Message_GetState(&play->msgCtx)==TEXT_STATE_NONE) {
+    // This runs after the message update, which closes a choice box itself on the frame A is pressed: the choice
+    // is read when the box is seen closing, or on A if this frame came first.
+    u8 state=Message_GetState(&play->msgCtx);
+    if(state==TEXT_STATE_NONE) {
         sCollectPrompt=0;return;
     }
-    if(Message_GetState(&play->msgCtx)!=TEXT_STATE_CHOICE || !Message_ShouldAdvance(play))return;
+    bool chosen=play->msgCtx.msgMode==MSGMODE_TEXT_CLOSING || (state==TEXT_STATE_CHOICE && Message_ShouldAdvance(play));
+    if(!chosen)return;
     int prompt=sCollectPrompt,choice=play->msgCtx.choiceIndex;sCollectPrompt=0;
-    Message_CloseTextbox(play);
+    if(state==TEXT_STATE_CHOICE)Message_CloseTextbox(play);
     if(prompt==1) {
-        if(sSoaringPage==SOARING_TERMINA_PAGE) {if(choice==0)FleetPortal_RequestDeparture("market");}
-        else if(choice==2) {if(sSoaringPage<3||FleetGame_IsHosted()){++sSoaringPage;ShowSoaringPage();}}
+        if(sSoaringPage==SOARING_TERMINA_PAGE) {
+            if(choice==0)FleetPortal_RequestDeparture("market");
+            else if(choice==1){sSoaringPage=0;sQueuedPrompt=1;}
+        }
+        else if(choice==2) {if(sSoaringPage<3||FleetGame_IsHosted()){++sSoaringPage;sQueuedPrompt=1;}}
         else {const OwlDestination* target=&sOwlDestinations[sSoaringPage*2+choice];WarpTo(target->entrance,target);}
     } else if(prompt==2 && choice<2) {
         s16 spawn=choice?ENTR_TEMPLE_OF_TIME_WARP_PAD:ENTR_LINKS_HOUSE_CHILD_SPAWN;
@@ -141,7 +155,7 @@ static void CollectBehaviorsTick(void) {
     }
 }
 static void CollectBehaviorsScene(int16_t scene) {
-    memset(sShells,0,sizeof(sShells));sCollectPrompt=0;sPendingSong=-1;
+    memset(sShells,0,sizeof(sShells));sCollectPrompt=0;sQueuedPrompt=0;sPendingSong=-1;
 }
 static void RegisterCollectBehaviors(void) {
     if(!SOH_MOD_API_HAS(sApi,RegisterActor) || !SOH_MOD_API_HAS(sApi,ShowTextbox) ||

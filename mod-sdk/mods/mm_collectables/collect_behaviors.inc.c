@@ -127,7 +127,14 @@ static void CollectBehaviorsTick(void) {
         if(poly!=NULL && floor>BGCHECK_Y_MIN)player->actor.world.pos.y=floor;
         sLandingPending=false;
     }
-    if(sQueuedPrompt && Message_GetState(&play->msgCtx)==TEXT_STATE_NONE) {
+    // The next page waits until Link has put the ocarina away: the ocarina's own ending closes any textbox that
+    // opens while it is still out.
+    if(sQueuedPrompt) {
+        Player* player=GET_PLAYER(play);
+        bool busy=Message_GetState(&play->msgCtx)!=TEXT_STATE_NONE ||
+                  (player->stateFlags2&PLAYER_STATE2_OCARINA_PLAYING)!=0;
+        if(busy){sQueuedPrompt=1;return;}
+        if(++sQueuedPrompt<8)return;
         sQueuedPrompt=0;ShowSoaringPage();return;
     }
     if(!sCollectPrompt)return;

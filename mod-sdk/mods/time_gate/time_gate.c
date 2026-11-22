@@ -223,7 +223,7 @@ static void UpdateHovering(Player* player, PlayState* play) {
         SpawnTimeSparkle(player, play, 20.0f);
     }
     if (++sTimer == TIME_GATE_PROMPT_DELAY) {
-        sIsPromptShown = sApi->ShowTextbox(play, "Travel through time?&\x1B%gYes&No%w", false);
+        sIsPromptShown = sApi->ShowTextbox(play, "Travel through time?\x1B&%gYes&No%w", false);
     }
     if (!sIsPromptShown || Message_GetState(&play->msgCtx) != TEXT_STATE_CHOICE || !Message_ShouldAdvance(play)) {
         return;

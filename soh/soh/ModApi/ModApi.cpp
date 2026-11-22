@@ -4,6 +4,7 @@
 #include <cmath>
 #include <fast/Fast3dWindow.h>
 #include <fast/interpreter.h>
+#include <cctype>
 #include <map>
 #include <string>
 #include <unordered_map>
@@ -582,7 +583,33 @@ void ModApi_SetModDisplayName(const std::string& name, const std::string& displa
 
 std::string ModApi_GetModDisplayName(const std::string& name) {
     auto found = ModDisplayNames().find(name);
-    return found != ModDisplayNames().end() ? found->second : name;
+    if (found != ModDisplayNames().end()) {
+        return found->second;
+    }
+    // No display name: "oot_equipment" reads "OoT Equipment".
+    std::string pretty;
+    size_t start = 0;
+    while (start <= name.size()) {
+        size_t end = name.find_first_of("_-", start);
+        std::string word = name.substr(start, end == std::string::npos ? std::string::npos : end - start);
+        if (!word.empty()) {
+            if (word == "oot") {
+                word = "OoT";
+            } else if (word == "mm" || word == "nei") {
+                for (char& c : word) {
+                    c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+                }
+            } else {
+                word[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(word[0])));
+            }
+            pretty += (pretty.empty() ? "" : " ") + word;
+        }
+        if (end == std::string::npos) {
+            break;
+        }
+        start = end + 1;
+    }
+    return pretty.empty() ? name : pretty;
 }
 
 const SOHModApi* ModApi_Get() {

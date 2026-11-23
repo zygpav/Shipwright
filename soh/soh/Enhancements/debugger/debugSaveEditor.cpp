@@ -1190,6 +1190,108 @@ static void DrawFleetComboItemsTab() {
     }
 }
 
+// Fleet Combo menu, NEI Items page: every mod item as an icon. Lit icons are owned; click one to give or take it.
+static ImTextureID CustomItemTexture(const SOHCustomItemDefinition* definition) {
+    const char* icon = CustomItemRegistry_ResolveTexture(definition->key, SOH_ITEM_ICON_SAVE_EDITOR);
+    if (icon == nullptr) {
+        icon = CustomItemRegistry_ResolveTexture(definition->key, SOH_ITEM_ICON_INVENTORY);
+    }
+    if (icon == nullptr || !ResourceMgr_FileExists(icon)) {
+        return nullptr;
+    }
+    static std::unordered_set<std::string> loadedIcons;
+    const std::string textureKey = "ModAPI.SaveEditor.Item." + std::string(definition->key);
+    auto gui = std::dynamic_pointer_cast<Fast::Fast3dGui>(Ship::Context::GetRawInstance()->GetWindow()->GetGui());
+    if (loadedIcons.insert(textureKey).second) {
+        gui->LoadGuiTexture(textureKey, icon, "", ImVec4(1, 1, 1, 1));
+    }
+    return gui->GetTextureByName(textureKey);
+}
+
+static const char* CustomItemName(const SOHCustomItemDefinition* definition) {
+    return definition->displayName != nullptr && definition->displayName[0] != '\0' ? definition->displayName
+                                                                                     : definition->key;
+}
+
+static void DrawNeiItemsPanel() {
+    if (gPlayState == nullptr) {
+        ImGui::TextDisabled("Load a file to give Hyrule's NEI items.");
+        return;
+    }
+    std::vector<const SOHCustomItemDefinition*> items;
+    int owned = 0;
+    for (uint32_t i = 0; i < CustomItemRegistry_GetCount(); ++i) {
+        const SOHCustomItemDefinition* definition = CustomItemRegistry_GetAt(i);
+        if (definition == nullptr || (!CustomItemRegistry_IsEditorVisible(definition->key) &&
+                                      !FleetComboIsEquipment(definition))) {
+            continue;
+        }
+        items.push_back(definition);
+        owned += FleetComboIsOwned(definition) ? 1 : 0;
+    }
+    if (items.empty()) {
+        ImGui::TextDisabled("No NEI items are loaded.");
+        return;
+    }
+    std::stable_sort(items.begin(), items.end(), [](const auto* a, const auto* b) {
+        return std::string(CustomItemName(a)) < std::string(CustomItemName(b));
+    });
+    ImGui::Text("%d of %d owned", owned, static_cast<int>(items.size()));
+    ImGui::SameLine();
+    if (ImGui::Button("Give all")) {
+        for (const auto* definition : items) {
+            FleetComboSetOwned(definition, true);
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Remove all")) {
+        for (const auto* definition : items) {
+            FleetComboSetOwned(definition, false);
+        }
+    }
+    static ImGuiTextFilter filter;
+    filter.Draw("Search##neiitems", 200);
+    ImGui::TextDisabled("Click an icon to give or remove it. Hover for where it is in the pause menu.");
+
+    const float cell = 44.0f;
+    const float spacing = ImGui::GetStyle().ItemSpacing.x;
+    const int perRow = std::max(1, static_cast<int>((ImGui::GetContentRegionAvail().x + spacing) / (cell + spacing)));
+    int column = 0;
+    for (const auto* definition : items) {
+        const char* name = CustomItemName(definition);
+        if (!filter.PassFilter(name) && !filter.PassFilter(definition->key)) {
+            continue;
+        }
+        if (column > 0) {
+            ImGui::SameLine();
+        }
+        const bool have = FleetComboIsOwned(definition);
+        ImGui::PushID(definition->key);
+        ImTextureID texture = CustomItemTexture(definition);
+        const ImVec4 tint = have ? ImVec4(1, 1, 1, 1) : ImVec4(0.35f, 0.35f, 0.35f, 0.6f);
+        const ImVec4 background = have ? ImVec4(0.2f, 0.45f, 0.2f, 0.6f) : ImVec4(0, 0, 0, 0.3f);
+        bool clicked;
+        if (texture != nullptr) {
+            clicked = ImGui::ImageButton("##item", texture, ImVec2(cell - 8, cell - 8), ImVec2(0, 0), ImVec2(1, 1),
+                                         background, tint);
+        } else {
+            clicked = ImGui::Button(std::string(name).substr(0, 3).c_str(), ImVec2(cell, cell));
+        }
+        if (clicked) {
+            FleetComboSetOwned(definition, !have);
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::BeginTooltip();
+            ImGui::TextUnformatted(name);
+            ImGui::TextDisabled("%s", definition->key);
+            ImGui::TextUnformatted(have ? FleetComboWhere(definition).c_str() : "Not owned (click to give)");
+            ImGui::EndTooltip();
+        }
+        ImGui::PopID();
+        column = (column + 1) % perRow;
+    }
+}
+
 void DrawInventoryTab() {
     auto gui = std::dynamic_pointer_cast<Fast::Fast3dGui>(Ship::Context::GetRawInstance()->GetWindow()->GetGui());
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 3.0f);
@@ -3137,9 +3239,7 @@ void SaveEditorWindow::InitElement() {
     static bool sMenuPages = false;
     if (FleetGame_IsHosted() && !sMenuPages) {
         sMenuPages = true;
-        ModMenu_AddFleetPage("Inventory", "Items", "inv:items", true, DrawInventoryItemsPanel);
-        ModMenu_AddFleetPage("Inventory", "NEI Items", "inv:nei", true,
-                             []() { DrawEditorPanel(DrawFleetComboItemsTab); });
-        ModMenu_AddFleetPage("Inventory", "Layout", "inv:layout", true, DrawInventoryLayoutPanel);
+        ModMenu_SetFleetPanel("fleet:items", []() { DrawEditorPanel(DrawNeiItemsPanel); });
+        ModMenu_SetFleetPanel("fleet:inventory", DrawInventoryItemsPanel);
     }
 }

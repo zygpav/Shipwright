@@ -1,3 +1,4 @@
+#include <cctype>
 #include "soh/Fleet/FleetGame.h"
 #include "CustomItemRegistry.h"
 #include "soh/ModApi/Layout/ModLayout.h"
@@ -183,10 +184,63 @@ void BuildVanillaCells() {
     }
 }
 
+// Fleet Combo: mod items fill extra item screens in order, 24 to a screen, with nothing left blank: masks first,
+// then everything else by name. Bottles and arrows keep their vanilla wheels. Only owned items take a cell, so the
+// screens grow as Link finds things. Pages are reached with L exactly like the vanilla screen's other pages.
+std::string SortName(const SOHCustomItemDefinition* definition) {
+    std::string name = definition->displayName != nullptr && definition->displayName[0] != '\0'
+                           ? definition->displayName
+                           : definition->key;
+    std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) { return std::tolower(c); });
+    return name;
+}
+
+bool IsMaskItem(const SOHCustomItemDefinition* definition) {
+    const std::string key = definition->key;
+    return key.find("mask") != std::string::npos || key.find("_hood") != std::string::npos ||
+           key.find("possession_cap") != std::string::npos;
+}
+
+bool JoinsVanillaWheel(const SOHCustomItemDefinition* definition, const SOHCustomItemPlacement& placement) {
+    const std::string key = definition->key;
+    return placement.page == SOH_ITEM_PAGE_VANILLA &&
+           (key.find("bottle") != std::string::npos || key.find("arrow") != std::string::npos);
+}
+
+void BuildAutoPages(std::map<uint16_t, std::array<WheelItems, SlotCount>>& pages) {
+    std::vector<const SOHCustomItemDefinition*> listed;
+    for (uint32_t index = 0; index < CustomItemRegistry_GetCount(); ++index) {
+        const SOHCustomItemDefinition* definition = CustomItemRegistry_GetAt(index);
+        SOHCustomItemPlacement placement;
+        if (definition == nullptr || CustomItemRegistry_IsVanillaUpgrade(definition) ||
+            !CustomItemRegistry_IsOwned(definition->key) ||
+            !KaleidoItemManager_GetPlacement(definition->key, &placement) ||
+            CustomItemRegistry_IsQuestPage(placement.page)) {
+            continue;
+        }
+        if (JoinsVanillaWheel(definition, placement)) {
+            pages[SOH_ITEM_PAGE_VANILLA][placement.slot].push_back(definition);
+        } else {
+            listed.push_back(definition);
+        }
+    }
+    std::stable_sort(listed.begin(), listed.end(), [](const auto* a, const auto* b) {
+        const bool maskA = IsMaskItem(a);
+        const bool maskB = IsMaskItem(b);
+        return maskA != maskB ? maskA : SortName(a) < SortName(b);
+    });
+    for (size_t index = 0; index < listed.size(); ++index) {
+        pages[static_cast<uint16_t>(index / SlotCount)][index % SlotCount].push_back(listed[index]);
+    }
+}
+
 void BuildVisiblePages() {
     BuildVanillaCells();
     std::map<uint16_t, std::array<WheelItems, SlotCount>> pages;
-    for (uint32_t index = 0; index < CustomItemRegistry_GetCount(); ++index) {
+    if (ModLayout_IsAuto()) {
+        BuildAutoPages(pages);
+    }
+    for (uint32_t index = 0; !ModLayout_IsAuto() && index < CustomItemRegistry_GetCount(); ++index) {
         const SOHCustomItemDefinition* definition = CustomItemRegistry_GetAt(index);
         SOHCustomItemPlacement placement;
         if (definition == nullptr || CustomItemRegistry_IsVanillaUpgrade(definition) ||
@@ -196,14 +250,6 @@ void BuildVisiblePages() {
         }
         if (CustomItemRegistry_IsQuestPage(placement.page)) {
             continue;
-        }
-        // Fleet Combo: the layout shows mod items on its own pages; only bottles and arrows join vanilla wheels.
-        if (ModLayout_IsAuto()) {
-            const std::string key = definition->key;
-            if (placement.page != SOH_ITEM_PAGE_VANILLA ||
-                (key.find("bottle") == std::string::npos && key.find("arrow") == std::string::npos)) {
-                continue;
-            }
         }
         pages[placement.page][placement.slot].push_back(definition);
     }
@@ -515,6 +561,48 @@ void* KaleidoItemManager_GetSlotIcon(uint8_t slot) {
 bool KaleidoItemManager_IsSlotAgeAllowed(uint8_t slot) {
     const SOHCustomItemDefinition* definition = GetShownSlotItem(slot);
     return definition != nullptr && CustomItemRegistry_IsUsableNow(definition->key);
+}
+
+bool KaleidoItemManager_Locate(const char* key, uint16_t* page, uint8_t* slot) {
+    if (key == nullptr) {
+        return false;
+    }
+    RefreshVisiblePages();
+    auto search = [&](const ItemPage& candidate, uint16_t id) {
+        for (uint8_t cell = 0; cell < SlotCount; ++cell) {
+            for (const auto* item : candidate.slots[cell]) {
+                if (std::strcmp(item->key, key) == 0) {
+                    *page = id;
+                    *slot = cell;
+                    return true;
+                }
+            }
+        }
+        return false;
+    };
+    if (search(sVanillaClaims, SOH_ITEM_PAGE_VANILLA)) {
+        return true;
+    }
+    for (const auto& visible : sVisiblePages) {
+        if (search(visible, visible.page)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool KaleidoItemManager_ShowItem(const char* key) {
+    uint16_t page = 0;
+    uint8_t slot = 0;
+    if (!KaleidoItemManager_Locate(key, &page, &slot)) {
+        return false;
+    }
+    if (page == SOH_ITEM_PAGE_VANILLA) {
+        sShownPage.reset();
+    } else {
+        sShownPage = page;
+    }
+    return true;
 }
 
 bool KaleidoItemManager_CycleItemPage(PlayState* play) {

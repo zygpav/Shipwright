@@ -227,6 +227,10 @@ void KaleidoQuestManager_Init(void);
 void* KaleidoItemManager_GetSlotIcon(uint8_t slot);
 bool KaleidoItemManager_IsSlotAgeAllowed(uint8_t slot);
 bool KaleidoItemManager_CycleItemPage(PlayState* play);
+// Where an owned item shows in the pause menu right now (page SOH_ITEM_PAGE_VANILLA: the main screen).
+bool KaleidoItemManager_Locate(const char* key, uint16_t* page, uint8_t* slot);
+// Opens the pause menu on that item's screen the next time it is drawn.
+bool KaleidoItemManager_ShowItem(const char* key);
 void KaleidoItemManager_HandleWheel(PlayState* play);
 void KaleidoItemManager_DrawWheels(PlayState* play);
 const SOHCustomItemDefinition* CustomItemRegistry_Find(const char* key);

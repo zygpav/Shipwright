@@ -336,7 +336,7 @@ void ArrangeOnPages(std::vector<Entry*>& group, const std::string& prefix, int p
 
 // Placements saved by earlier Fleet Combo builds put mod gear on top of vanilla cells; drop them once so the
 // themed pages take over. Moves made in the layout editor after this are kept.
-constexpr int FleetLayoutVersion = 1;
+constexpr int FleetLayoutVersion = 2;
 
 void ResetOldPlacements(uint8_t kind, const std::vector<Entry>& entries) {
     const auto versionKey = Setting(std::to_string(kind), "FleetVersion");
@@ -350,6 +350,8 @@ void ResetOldPlacements(uint8_t kind, const std::vector<Entry>& entries) {
         }
     }
     CVarClear(Setting(std::to_string(kind), "Edited").c_str());
+    CVarClear(Setting(std::to_string(kind) + "." + NativePage, "Rows").c_str());
+    CVarClear(Setting(std::to_string(kind) + "." + NativePage, "Columns").c_str());
     CVarSetInteger(versionKey.c_str(), FleetLayoutVersion);
     SaveLayout();
 }
@@ -1211,7 +1213,16 @@ void ModLayout_CompleteCustomEquip(PlayState* play) {
     sAnimatingItem.clear();
 }
 
+// Fleet Combo: with the automatic layout, item pages are the vanilla item screen itself (KaleidoItemManager pages,
+// same cells, cursor and wheels as the vanilla game), so the layout only draws gear pages.
+bool UsesVanillaItemPages(uint8_t kind) {
+    return kind == SOH_LAYOUT_ITEMS && IsAutoLayout();
+}
+
 bool ModLayout_CyclePage(PlayState* play, uint8_t kind) {
+    if (UsesVanillaItemPages(kind)) {
+        return false;
+    }
     if (play == nullptr || kind >= SOH_LAYOUT_COUNT || play->pauseCtx.state != 6 ||
         (play->pauseCtx.unk_1E4 != 0 && play->pauseCtx.unk_1E4 != 8)) {
         return false;
@@ -1253,6 +1264,10 @@ bool ModLayout_CyclePage(PlayState* play, uint8_t kind) {
 
 bool ModLayout_DrawPage(PlayState* play, uint8_t kind) {
     if (play == nullptr || kind >= SOH_LAYOUT_COUNT) {
+        return false;
+    }
+    if (UsesVanillaItemPages(kind)) {
+        sActive[kind] = false;
         return false;
     }
     const auto entries = Entries(kind);
@@ -1402,6 +1417,18 @@ bool ModLayout_DescribeItem(const char* key, char* buffer, size_t size) {
     if (buffer == nullptr || size == 0 || !FindLayoutEntry(key, &kind, &entry)) {
         return false;
     }
+    if (UsesVanillaItemPages(kind)) {
+        uint16_t page = 0;
+        uint8_t slot = 0;
+        if (!KaleidoItemManager_Locate(key, &page, &slot)) {
+            std::snprintf(buffer, size, "%s", CustomItemRegistry_IsOwned(key) ? "Not in the menu" : "Not owned yet");
+        } else if (page == SOH_ITEM_PAGE_VANILLA) {
+            std::snprintf(buffer, size, "Items, main screen, slot %d", slot + 1);
+        } else {
+            std::snprintf(buffer, size, "Items, screen %d (press L), slot %d", page + 2, slot + 1);
+        }
+        return true;
+    }
     const auto pages = Pages(kind, Entries(kind));
     const auto& page = FindPage(pages, entry.placement.page);
     const std::string where = std::string(KindNames[kind]) + ", " +
@@ -1416,6 +1443,9 @@ bool ModLayout_ShowItem(const char* key) {
     Entry entry;
     if (!FindLayoutEntry(key, &kind, &entry)) {
         return false;
+    }
+    if (UsesVanillaItemPages(kind)) {
+        return KaleidoItemManager_ShowItem(key);
     }
     sShown[kind] = entry.placement.page;
     sCursor[kind] = entry.placement.cell;

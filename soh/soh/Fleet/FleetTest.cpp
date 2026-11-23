@@ -242,6 +242,15 @@ void Run(const std::string& line) {
             }
         }
         Report("giveall: " + std::to_string(count));
+        std::string missing;
+        for (uint32_t i = 0; i < CustomItemRegistry_GetCount(); ++i) {
+            const SOHCustomItemDefinition* definition = CustomItemRegistry_GetAt(i);
+            if (definition != nullptr && !IsOwned(definition->key)) {
+                missing += std::string(" ") + definition->key +
+                           (CustomItemRegistry_IsEditorVisible(definition->key) ? "" : "(hidden)");
+            }
+        }
+        Report("giveall not owned:" + (missing.empty() ? std::string(" none") : missing));
     } else if (verb == "vanilla") {
         std::string item;
         args >> item;

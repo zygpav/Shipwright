@@ -829,9 +829,14 @@ void Play_Update(PlayState* play) {
                             sceneLayer = SCENE_LAYER_CUTSCENE_FIRST + (gSaveContext.cutsceneIndex & 0xF);
                         }
 
+                        // Fleet Combo: leaving the title screen for file select never sets nextEntranceIndex, so it
+                        // can hold anything; reading the entrance table with it crashed now and then on launch.
+                        s32 bgmEntrance = play->nextEntranceIndex + sceneLayer;
+                        if (bgmEntrance < 0 || bgmEntrance >= EntranceDB_GetEntryCount()) {
+                            bgmEntrance = 0;
+                        }
                         // fade out bgm if "continue bgm" flag is not set
-                        if (!(gEntranceTable[play->nextEntranceIndex + sceneLayer].field &
-                              ENTRANCE_INFO_CONTINUE_BGM_FLAG)) {
+                        if (!(gEntranceTable[bgmEntrance].field & ENTRANCE_INFO_CONTINUE_BGM_FLAG)) {
                             // "Sound initalized. 111"
                             osSyncPrintf("\n\n\nサウンドイニシャル来ました。111");
                             if ((play->transitionType < TRANS_TYPE_MAX) && !Environment_IsForcedSequenceDisabled()) {

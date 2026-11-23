@@ -13,7 +13,9 @@
 #include <vector>
 #include <spdlog/spdlog.h>
 
+#include "soh/cvar_prefixes.h"
 #include "soh/Fleet/FleetMenu.h"
+#include "soh/Fleet/FleetGame.h"
 #include "soh/SohGui/SohGui.hpp"
 #include "soh/SohGui/SohMenu.h"
 #include "soh/SohGui/UIWidgets.hpp"
@@ -349,7 +351,10 @@ void DrawFleetComboPage() {
     static const std::map<int32_t, const char*> kEra = {
         { -1, "Follow Link's age" }, { 0, "Child era (past)" }, { 1, "Adult era (future)" }
     };
-    ImGui::TextWrapped("Hyrule's side of the combined game.");
+    ImGui::TextColored(FleetMenu_IsActive() ? ImVec4(0.5f, 1, 0.5f, 1) : ImVec4(0.7f, 0.7f, 0.7f, 1), "%s",
+                       FleetMenu_IsActive() ? "Link is in Hyrule now" : "Waiting while Link is in Termina");
+    ImGui::TextWrapped("Travel with the Song of Soaring. NEI Items gives or removes mod items, Inventory edits the "
+                       "vanilla items, Mod Settings holds every mod's options.");
     ImGui::Spacing();
     UIWidgets::CVarCombobox("World Era", "gFleetCombo.Era", kEra,
                             UIWidgets::ComboboxOptions()
@@ -368,6 +373,13 @@ void DrawFleetComboPage() {
                                 .DefaultValue(false)
                                 .Tooltip("Also travel through the Happy Mask Shop / Clock Tower doors. The Song of "
                                          "Soaring always works.")
+                                .Color(THEME_COLOR));
+    UIWidgets::CVarCheckbox("Tidy pause menu", CVAR_ENHANCEMENT("ModLayout.Auto"),
+                            UIWidgets::CheckboxOptions()
+                                .DefaultValue(true)
+                                .Tooltip("Vanilla items stay where they always are. Mod items fill extra item screens "
+                                         "(press L on the item screen), masks first; mod gear gets its own "
+                                         "equipment screen. Turn off to use each mod's own placement.")
                                 .Color(THEME_COLOR));
 }
 
@@ -401,16 +413,84 @@ void EnsureSidebar(const std::string& section, const std::string& sidebar, const
 // A page drawn as both games' panels (see FleetMenu.h): this game registers its own half under the panel's name.
 void AddSplitPage(const std::string& section, const std::string& sidebar, const std::string& panel, FleetSplit split,
                   std::function<void()> draw) {
-    FleetMenu_RegisterPanel(panel, std::move(draw));
-    EnsureSidebar(section, sidebar, "gFleetCombo.Menu." + section + "Page");
+    if (draw) {
+        FleetMenu_RegisterPanel(panel, std::move(draw));
+    }
+    EnsureSidebar(section, sidebar, "gFleetCombo.Menu.Page");
     AddCustomPageWidget(section, sidebar, [panel, split]() { FleetMenu_DrawSplit(panel.c_str(), split); });
+}
+
+// Every mod's settings on one page, one closed header per mod (whatever category the mod filed them under), with a
+// search box: the menu's NEI part used to be six pages of the same headers.
+void DrawModSettingsPanel() {
+    static ImGuiTextFilter filter;
+    filter.Draw("Search##modsettings", 220);
+    std::vector<std::string> order;
+    std::map<std::string, std::vector<RegisteredWidget*>> mods;
+    for (const auto& page : sGatheredPages) {
+        if (page.section != "NEI") {
+            continue;
+        }
+        for (const auto& group : page.groups) {
+            if (!mods.contains(group.name)) {
+                order.push_back(group.name);
+            }
+            auto& widgets = mods[group.name];
+            widgets.insert(widgets.end(), group.widgets.begin(), group.widgets.end());
+        }
+    }
+    if (order.empty()) {
+        ImGui::TextDisabled("No mod has settings.");
+        return;
+    }
+    for (const auto& name : order) {
+        const auto& widgets = mods[name];
+        const bool nameMatches = filter.PassFilter(name.c_str());
+        const bool anyMatches = nameMatches || std::any_of(widgets.begin(), widgets.end(), [](const auto* widget) {
+                                    return filter.PassFilter(widget->label.c_str());
+                                });
+        if (!anyMatches) {
+            continue;
+        }
+        ImGui::PushID(name.c_str());
+        if (filter.IsActive()) {
+            ImGui::SetNextItemOpen(true);
+        }
+        if (ImGui::CollapsingHeader(name.c_str())) {
+            ImGui::Indent();
+            for (auto* widget : widgets) {
+                if (nameMatches || filter.PassFilter(widget->label.c_str()) ||
+                    widget->definition.type == SOH_MOD_MENU_CUSTOM) {
+                    DrawGatheredWidget(*widget);
+                }
+            }
+            ImGui::Unindent();
+            ImGui::Spacing();
+        }
+        ImGui::PopID();
+    }
+}
+
+// Fleet Combo: one menu section for the combined game, every page showing Hyrule and Termina side by side.
+constexpr const char* FleetSection = "Fleet Combo";
+
+void EnsureFleetSection() {
+    static bool sCreated = false;
+    if (sCreated || !FleetGame_IsHosted()) {
+        return;
+    }
+    sCreated = true;
+    AddSplitPage(FleetSection, "Home", "fleet:home", FleetSplit::Columns, DrawFleetComboPage);
+    AddSplitPage(FleetSection, "NEI Items", "fleet:items", FleetSplit::Columns, nullptr);
+    AddSplitPage(FleetSection, "Inventory", "fleet:inventory", FleetSplit::Stacked, nullptr);
+    AddSplitPage(FleetSection, "Mod Settings", "fleet:mods", FleetSplit::Columns, DrawModSettingsPanel);
 }
 
 GatheredPage& AddGatheredPage(const std::string& section, const std::string& sidebar) {
     sGatheredPages.push_back({ section, sidebar, {} });
     GatheredPage* page = &sGatheredPages.back();
-    if (section == "NEI") {
-        AddSplitPage(section, sidebar, "nei:" + sidebar, FleetSplit::Columns, [page]() { DrawGatheredPage(*page); });
+    if (section == "NEI" && FleetGame_IsHosted()) {
+        EnsureFleetSection(); // drawn by the Mod Settings page
     } else {
         EnsureSidebar(section, sidebar, "gFleetCombo.Menu." + section + "Page");
         AddCustomPageWidget(section, sidebar, [page]() { DrawGatheredPage(*page); });
@@ -424,12 +504,13 @@ GatheredPage& GetGatheredPage(const std::string& section, const std::string& sid
             return page;
         }
     }
-    const std::string cvar = "gFleetCombo.Menu." + section + "Page";
-    if (section == "NEI" && std::none_of(sGatheredPages.begin(), sGatheredPages.end(),
-                                         [](const auto& existing) { return existing.section == "NEI"; })) {
+    if (section == "NEI" && !FleetGame_IsHosted() &&
+        std::none_of(sGatheredPages.begin(), sGatheredPages.end(),
+                     [](const auto& existing) { return existing.section == "NEI"; })) {
         // The section's pages in a fixed order, whichever mod loads first; "Other" comes last, when needed.
-        AddSplitPage("NEI", "Fleet Combo", "nei:Fleet Combo", FleetSplit::Columns, DrawFleetComboPage);
-        for (const char* category : { "Items & Masks", "Equipment", "Gameplay", "Companions", "Visuals", "Other" }) {
+        EnsureSidebar("NEI", "Fleet Combo", "gFleetCombo.Menu.NEIPage");
+        AddCustomPageWidget("NEI", "Fleet Combo", DrawFleetComboPage);
+        for (const char* category : { "Items & Masks", "Equipment", "Gameplay", "Companions", "Visuals" }) {
             if (category != sidebar) {
                 AddGatheredPage("NEI", category);
             }
@@ -524,9 +605,9 @@ bool ModMenu_RegisterWidgetAt(const SOHModMenuWidget* widget, const char* anchor
     return StoreWidget(widget, anchor, after);
 }
 
-void ModMenu_AddFleetPage(const char* section, const char* sidebar, const char* panel, bool stacked,
-                          std::function<void()> draw) {
-    AddSplitPage(section, sidebar, panel, stacked ? FleetSplit::Stacked : FleetSplit::Columns, std::move(draw));
+void ModMenu_SetFleetPanel(const char* panel, std::function<void()> draw) {
+    EnsureFleetSection();
+    FleetMenu_RegisterPanel(panel, std::move(draw));
 }
 
 void ModMenu_Describe(std::vector<std::string>& lines) {

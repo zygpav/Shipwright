@@ -1,3 +1,4 @@
+#include "soh/ModApi/Layout/ModLayout.h"
 #include "CustomEquipRegistry.h"
 
 #include <algorithm>
@@ -51,6 +52,10 @@ const SOHCustomEquipDefinition* FindClaimOnPage(uint8_t page, uint8_t row, uint8
 }
 
 const SOHCustomEquipDefinition* FindClaim(uint8_t row, uint8_t column) {
+    // Fleet Combo: the layout puts mod gear on its own pages, so nothing covers the vanilla gear.
+    if (ModLayout_IsAuto()) {
+        return nullptr;
+    }
     const bool isVanillaUpgradeColumn = ShownPage() == SOH_EQUIP_PAGE_VANILLA && column == PassiveColumn;
     if (isVanillaUpgradeColumn) {
         return nullptr;
@@ -60,6 +65,9 @@ const SOHCustomEquipDefinition* FindClaim(uint8_t row, uint8_t column) {
 
 std::vector<uint8_t> VisiblePages() {
     std::vector<uint8_t> pages;
+    if (ModLayout_IsAuto()) {
+        return pages;
+    }
     for (uint32_t index = 0; index < CustomEquipRegistry_GetCount(); ++index) {
         const SOHCustomEquipDefinition* definition = CustomEquipRegistry_GetAt(index);
         if (definition == nullptr || definition->page == SOH_EQUIP_PAGE_VANILLA ||

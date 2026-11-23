@@ -16,6 +16,7 @@
 #include "soh/Enhancements/game-interactor/GameInteractor.h"
 #include "soh/Enhancements/game-interactor/GameInteractor_Hooks.h"
 #include "soh/ResourceManagerHelpers.h"
+#include "soh/Fleet/FleetGame.h"
 #include "soh/cvar_prefixes.h"
 #include "soh/Enhancements/enhancementTypes.h"
 
@@ -299,6 +300,107 @@ std::vector<Entry> NativeEntries(uint8_t kind) {
     return entries;
 }
 
+// Fleet Combo lays mod items out itself: the vanilla page keeps the vanilla items (and the mods' bottles and arrows,
+// which share those cells as wheels), and every other mod item goes on themed pages reached with L: masks together,
+// then tools and other items, then gear by kind (one row each for swords, shields, tunics, boots, then the rest).
+// Only placements the player never moved in the layout editor are arranged.
+bool IsAutoLayout() {
+    return FleetGame_IsHosted() && CVarGetInteger(CVAR_ENHANCEMENT("ModLayout.Auto"), 1) != 0;
+}
+
+bool PlayerPlaced(const std::string& key) {
+    return CVarGetString(Setting(key, "Page").c_str(), "")[0] != '\0';
+}
+
+bool KeepsVanillaCell(const Entry& entry) {
+    if (entry.placement.page != NativePage) {
+        return false;
+    }
+    const std::string& key = entry.key;
+    return key.find("bottle") != std::string::npos || key.find("arrow") != std::string::npos;
+}
+
+bool IsMask(const Entry& entry) {
+    return entry.key.find("mask") != std::string::npos || entry.key.find("_hood") != std::string::npos ||
+           entry.key.find("possession_cap") != std::string::npos;
+}
+
+void ArrangeOnPages(std::vector<Entry*>& group, const std::string& prefix, int perPage) {
+    std::stable_sort(group.begin(), group.end(),
+                     [](const Entry* a, const Entry* b) { return a->label < b->label; });
+    for (size_t index = 0; index < group.size(); ++index) {
+        group[index]->placement = { prefix + "." + std::to_string(index / perPage + 1),
+                                    static_cast<int>(index % perPage) };
+    }
+}
+
+// Placements saved by earlier Fleet Combo builds put mod gear on top of vanilla cells; drop them once so the
+// themed pages take over. Moves made in the layout editor after this are kept.
+constexpr int FleetLayoutVersion = 1;
+
+void ResetOldPlacements(uint8_t kind, const std::vector<Entry>& entries) {
+    const auto versionKey = Setting(std::to_string(kind), "FleetVersion");
+    if (CVarGetInteger(versionKey.c_str(), 0) >= FleetLayoutVersion || CustomItemRegistry_GetCount() == 0) {
+        return;
+    }
+    for (const auto& entry : entries) {
+        if (entry.custom != nullptr || entry.equipment != nullptr) {
+            CVarClear(Setting(entry.key, "Page").c_str());
+            CVarClear(Setting(entry.key, "Cell").c_str());
+        }
+    }
+    CVarClear(Setting(std::to_string(kind), "Edited").c_str());
+    CVarSetInteger(versionKey.c_str(), FleetLayoutVersion);
+    SaveLayout();
+}
+
+void AutoLayout(uint8_t kind, std::vector<Entry>& entries) {
+    if (!IsAutoLayout()) {
+        return;
+    }
+    ResetOldPlacements(kind, entries);
+    if (kind == SOH_LAYOUT_ITEMS) {
+        std::vector<Entry*> masks;
+        std::vector<Entry*> items;
+        for (auto& entry : entries) {
+            if (entry.custom == nullptr || PlayerPlaced(entry.key) || KeepsVanillaCell(entry)) {
+                continue;
+            }
+            (IsMask(entry) ? masks : items).push_back(&entry);
+        }
+        ArrangeOnPages(masks, "fleet.masks", 24);
+        ArrangeOnPages(items, "fleet.items", 24);
+    } else if (kind == SOH_LAYOUT_EQUIPMENT) {
+        // Four rows of six: a row per slot, so the gear reads like the vanilla page.
+        std::array<int, SOH_EQUIP_SLOT_MAX> used{};
+        for (auto& entry : entries) {
+            if (entry.equipment == nullptr || PlayerPlaced(entry.key)) {
+                continue;
+            }
+            const int slot = std::clamp<int>(entry.equipment->slot, 0, SOH_EQUIP_SLOT_MAX - 1);
+            const int index = used[slot]++;
+            if (slot == SOH_EQUIP_SLOT_UPGRADE) {
+                entry.placement = { "fleet.upgrades." + std::to_string(index / 24 + 1), index % 24 };
+            } else {
+                entry.placement = { "fleet.gear." + std::to_string(index / 6 + 1), slot * 6 + index % 6 };
+            }
+        }
+    }
+}
+
+std::string PageTitle(const std::string& key) {
+    static const std::pair<const char*, const char*> kTitles[] = {
+        { "fleet.masks.", "Masks " }, { "fleet.items.", "NEI Items " }, { "fleet.gear.", "NEI Gear " }, { "fleet.upgrades.", "NEI Upgrades " }
+    };
+    for (const auto& [prefix, title] : kTitles) {
+        if (key.rfind(prefix, 0) == 0) {
+            const std::string number = key.substr(std::string(prefix).size());
+            return std::string(title) + number;
+        }
+    }
+    return "Page " + key.substr(key.find('.') + 1);
+}
+
 std::vector<Entry> Entries(uint8_t kind) {
     auto entries = NativeEntries(kind);
     for (const auto& reference : sVanillaReferences) {
@@ -344,6 +446,7 @@ std::vector<Entry> Entries(uint8_t kind) {
                   row * 4 + definition->column });
             entries.push_back(std::move(entry));
         }
+        AutoLayout(kind, entries);
         return entries;
     }
     for (uint32_t i = 0; i < CustomItemRegistry_GetCount(); ++i) {
@@ -376,8 +479,12 @@ std::vector<Entry> Entries(uint8_t kind) {
         entry.item = ITEM_CUSTOM;
         entry.owned = CustomItemRegistry_IsOwned(definition->key);
         entry.placement = GetPlacement(entry.key, { ItemPage(placement.page), placement.slot });
+        if (definition->displayName != nullptr && definition->displayName[0] != '\0') {
+            entry.label = definition->displayName;
+        }
         entries.push_back(std::move(entry));
     }
+    AutoLayout(kind, entries);
     return entries;
 }
 
@@ -412,11 +519,19 @@ std::vector<Page> Pages(uint8_t kind, const std::vector<Entry>& entries) {
     }
     for (const auto& entry : entries) {
         if (keys.insert(entry.placement.page).second) {
-            pages.push_back(MakeGrid(kind, entry.placement.page,
-                                     "Page " + entry.placement.page.substr(entry.placement.page.find('.') + 1), 4,
-                                     kind == SOH_LAYOUT_EQUIPMENT ? 4 : 6));
+            const bool gear = entry.placement.page.rfind("fleet.gear.", 0) == 0 ||
+                              entry.placement.page.rfind("fleet.upgrades.", 0) == 0;
+            pages.push_back(MakeGrid(kind, entry.placement.page, PageTitle(entry.placement.page), 4,
+                                     gear ? 6 : kind == SOH_LAYOUT_EQUIPMENT ? 4 : 6));
         }
     }
+    // Themed pages in a steady order after the vanilla page and the mods' own pages.
+    std::stable_sort(pages.begin() + 1, pages.end(), [](const Page& a, const Page& b) {
+        auto rank = [](const Page& page) {
+            return page.key.rfind("fleet.", 0) == 0 ? 1 : page.key.rfind("user.", 0) == 0 ? 2 : 0;
+        };
+        return rank(a) != rank(b) ? rank(a) < rank(b) : (rank(a) == 1 && a.key < b.key);
+    });
     return pages;
 }
 
@@ -883,6 +998,24 @@ bool IsEntryEquipped(const Entry& entry) {
     return CUR_EQUIP_VALUE(slot) == entry.source % 4 && CustomEquipRegistry_GetWorn(slot) == nullptr;
 }
 
+// The size of an icon texture, when it can be read; the sizes passed in stay otherwise.
+void IconTextureSize(const char* icon, int* width, int* height) {
+    std::string path = icon;
+    static const std::string kPrefix = "__OTR__";
+    if (path.rfind(kPrefix, 0) == 0) {
+        path = path.substr(kPrefix.size());
+    }
+    if (!ResourceMgr_FileExists(path.c_str())) {
+        return;
+    }
+    const int w = ResourceGetTexWidthByName(path.c_str());
+    const int h = ResourceGetTexHeightByName(path.c_str());
+    if (w > 0 && h > 0 && w <= 64 && h <= 64) {
+        *width = w;
+        *height = h;
+    }
+}
+
 void FillQuad(Vtx* vertices, const SOHLayoutCell& cell, int textureWidth, int textureHeight, int offsetY) {
     for (int i = 0; i < 4; ++i) {
         vertices[i] = {};
@@ -1172,8 +1305,12 @@ bool ModLayout_DrawPage(PlayState* play, uint8_t kind) {
             selected != nullptr && selected->custom == nullptr && selected->sourceKind == SOH_LAYOUT_COLLECTABLES;
         const bool song = quest && selected->source >= 6 && selected->source < 18;
         const bool heart = quest && selected->source == 24;
-        const int textureWidth = heart ? 48 : song ? 16 : quest ? 24 : 32;
-        const int textureHeight = song ? 24 : textureWidth;
+        int textureWidth = heart ? 48 : song ? 16 : quest ? 24 : 32;
+        int textureHeight = song ? 24 : textureWidth;
+        // A mod's icon is drawn at its own size: a 32x32 item icon on a 24x24 quest point would read past its rows.
+        if (selected != nullptr && selected->icon != nullptr && !song && !heart) {
+            IconTextureSize(selected->icon, &textureWidth, &textureHeight);
+        }
         auto bounds = page.cells[cell];
         if (kind == SOH_LAYOUT_ITEMS && pause.pageIndex == PAUSE_ITEM && pause.cursorSpecialPos == 0 &&
             pause.unk_1E4 == 0 && cell == sCursor[kind] && selected != nullptr && IsAgeAllowed(*selected)) {
@@ -1284,6 +1421,30 @@ bool ModLayout_ShowItem(const char* key) {
     sCursor[kind] = entry.placement.cell;
     sCycling[kind] = false;
     return true;
+}
+
+void ModLayout_Describe(std::vector<std::string>& lines) {
+    for (uint8_t kind = 0; kind < SOH_LAYOUT_COUNT; ++kind) {
+        const auto entries = Entries(kind);
+        const auto pages = Pages(kind, entries);
+        for (const auto& page : pages) {
+            std::string line = "kind " + std::to_string(kind) + " page " + page.key + " '" + page.title + "' " +
+                               std::to_string(page.rows) + "x" + std::to_string(page.columns) + ":";
+            int shown = 0;
+            for (const auto& entry : entries) {
+                if (entry.placement.page != page.key || (entry.custom == nullptr && entry.equipment == nullptr)) {
+                    continue;
+                }
+                line += " " + std::to_string(entry.placement.cell) + "=" + entry.key + (entry.owned ? "*" : "");
+                ++shown;
+            }
+            lines.push_back(line + (shown == 0 ? " (vanilla only)" : ""));
+        }
+    }
+}
+
+bool ModLayout_IsAuto(void) {
+    return IsAutoLayout();
 }
 
 bool ModLayout_HasMods(void) {

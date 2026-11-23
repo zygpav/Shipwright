@@ -56,6 +56,8 @@ bool ModLayout_BeginCustomEquip(struct PlayState* play, const char* key, uint8_t
 void ModLayout_CompleteCustomEquip(struct PlayState* play);
 const char* ModLayout_GetEquipIcon(void);
 bool ModLayout_HasMods(void);
+// Fleet Combo: mod items and gear are arranged on themed pages by the layout (no claims on vanilla cells).
+bool ModLayout_IsAuto(void);
 // Fleet Combo: describe where the pause menu shows an item; open the menu on its page next time.
 bool ModLayout_DescribeItem(const char* key, char* buffer, size_t size);
 bool ModLayout_ShowItem(const char* key);
@@ -66,6 +68,10 @@ void ModLayout_Init(void);
 
 void ModLayout_DrawEditor(uint8_t kind);
 void ModLayout_DrawWindowButton();
+#include <string>
+#include <vector>
+// Fleet Combo test mode: every page and what sits in each cell.
+void ModLayout_Describe(std::vector<std::string>& lines);
 #endif
 
 #endif

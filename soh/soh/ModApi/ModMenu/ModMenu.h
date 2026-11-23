@@ -62,6 +62,10 @@ bool ModUI_InputInt(const char* label, int32_t* value);
 #include <vector>
 // Fleet Combo test mode: the gathered NEI/Dev Tools pages, one line per mod section and setting.
 void ModMenu_Describe(std::vector<std::string>& lines);
+#include <functional>
+// Fleet Combo: a menu page drawn as both games' halves (FleetMenu.h); draw is this game's half of the panel.
+void ModMenu_AddFleetPage(const char* section, const char* sidebar, const char* panel, bool stacked,
+                          std::function<void()> draw);
 #endif
 
 #endif

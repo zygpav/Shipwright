@@ -1,3 +1,5 @@
+#include "soh/Fleet/FleetMenu.h"
+#include "soh/ModApi/ModMenu/ModMenu.h"
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -1043,7 +1045,14 @@ static bool FleetComboIsOwned(const SOHCustomItemDefinition* definition) {
                                              : CustomItemRegistry_IsOwned(definition->key);
 }
 
+static void FleetComboApplyOwned(const SOHCustomItemDefinition* definition, bool owned);
+
+// Drawn from Majora's Mask's menu, Hyrule is paused: the change is made when Link is back in Hyrule.
 static void FleetComboSetOwned(const SOHCustomItemDefinition* definition, bool owned) {
+    FleetMenu_Defer([definition, owned]() { FleetComboApplyOwned(definition, owned); });
+}
+
+static void FleetComboApplyOwned(const SOHCustomItemDefinition* definition, bool owned) {
     if (definition == nullptr) {
         return;
     }
@@ -1092,12 +1101,9 @@ static const char* FleetComboGroup(const char* key) {
 static void DrawFleetComboItemsTab() {
     static ImGuiTextFilter filter;
     static int group = 0; // 0 all, 1 NEI, 2 Termina
-    ImGui::TextWrapped("Give items while Link is in the game (a file loaded). The 'Where' column says where the pause "
-                       "menu shows each one: extra item pages are reached with L, and items sharing a slot form a wheel "
-                       "(select it with A, then turn it with the stick).");
-    ImGui::TextWrapped("Every NEI item and every Majora's Mask item that exists in Hyrule. Vanilla Ocarina of Time "
-                       "items are in the Inventory, Equipment and Quest Status tabs. Majora's Mask's own Save Editor has "
-                       "the same list for Termina (Mod Items & Equipment).");
+    ImGui::TextWrapped("Every NEI item and every Majora's Mask item that exists in Hyrule. 'Where' says where the "
+                       "pause menu shows it: extra pages are reached with L, and items sharing a slot form a wheel "
+                       "(A, then turn it with the stick).");
     filter.Draw("Search");
     ImGui::Combo("Show", &group, "Everything\0NEI items\0Termina (MM) items\0");
     auto visible = [&](const SOHCustomItemDefinition* definition) {
@@ -1135,8 +1141,9 @@ static void DrawFleetComboItemsTab() {
     }
     ImGui::TextWrapped("Tip: 'Show' opens the pause menu on that item's page the next time you pause. Extra pages "
                        "are otherwise reached with the L button (Z if the GameCube page switcher is on).");
+    const float tableHeight = FleetGame_IsHosted() ? 420.0f : ImGui::GetContentRegionAvail().y;
     if (ImGui::BeginTable("FleetComboItems", 5, ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY | ImGuiTableFlags_BordersInnerV,
-                          ImVec2(0, ImGui::GetContentRegionAvail().y))) {
+                          ImVec2(0, tableHeight))) {
         ImGui::TableSetupColumn("Have", ImGuiTableColumnFlags_WidthFixed, 48.0f);
         ImGui::TableSetupColumn("Item");
         ImGui::TableSetupColumn("From", ImGuiTableColumnFlags_WidthFixed, 110.0f);
@@ -1172,7 +1179,7 @@ static void DrawFleetComboItemsTab() {
             ImGui::TableNextColumn();
             ImGui::TextUnformatted(FleetComboWhere(definition).c_str());
             ImGui::TableNextColumn();
-            ImGui::BeginDisabled(!owned);
+            ImGui::BeginDisabled(!owned || !FleetMenu_IsActive());
             if (ImGui::SmallButton("Show")) {
                 ModLayout_ShowItem(definition->key);
             }
@@ -2996,14 +3003,11 @@ void SaveEditorWindow::DrawElement() {
             ImGui::EndTabItem();
         }
 
+        // Fleet Combo: items, equipment and quest status are edited from the menu's Inventory section, for both
+        // games at once; the Save Editor keeps the rest.
+        const bool hosted = FleetGame_IsHosted();
         ResetBaseOptions();
-        if (ImGui::BeginTabItem("Fleet Combo")) {
-            DrawFleetComboItemsTab();
-            ImGui::EndTabItem();
-        }
-
-        ResetBaseOptions();
-        if (ImGui::BeginTabItem("Inventory")) {
+        if (!hosted && ImGui::BeginTabItem("Inventory")) {
             if (ImGui::CollapsingHeader("Inventory layout")) {
                 ModLayout_DrawEditor(SOH_LAYOUT_ITEMS);
             }
@@ -3012,7 +3016,7 @@ void SaveEditorWindow::DrawElement() {
         }
 
         ResetBaseOptions();
-        if (ImGui::BeginTabItem("Equipment")) {
+        if (!hosted && ImGui::BeginTabItem("Equipment")) {
             if (ImGui::CollapsingHeader("Equipment layout")) {
                 ModLayout_DrawEditor(SOH_LAYOUT_EQUIPMENT);
             }
@@ -3021,7 +3025,7 @@ void SaveEditorWindow::DrawElement() {
         }
 
         ResetBaseOptions();
-        if (ImGui::BeginTabItem("Quest Status")) {
+        if (!hosted && ImGui::BeginTabItem("Quest Status")) {
             if (ImGui::CollapsingHeader("Collectables layout")) {
                 ModLayout_DrawEditor(SOH_LAYOUT_COLLECTABLES);
             }
@@ -3047,8 +3051,8 @@ void SaveEditorWindow::DrawElement() {
             ImGui::EndTabItem();
         }
 
-        // Fleet Combo: the Fleet Combo tab covers every mod's items; skip the per-mod tabs.
-        if (!FleetGame_IsHosted()) {
+        // Fleet Combo: the Inventory section covers every mod's items; skip the per-mod tabs.
+        if (!hosted) {
             GameInteractor::Instance->ExecuteHooks<GameInteractor::OnSaveEditorTabs>(&gSaveContext);
         }
         ImGui::EndTabBar();
@@ -3059,8 +3063,83 @@ void SaveEditorWindow::DrawElement() {
     PopStyleTabs();
 }
 
+// Fleet Combo: the menu's Inventory section, this game's half of each page (the other half is Majora's Mask's).
+static void DrawEditorPanel(const std::function<void()>& body) {
+    PushStyleTabs(THEME_COLOR);
+    ImGui::BeginDisabled(CVarGetInteger(CVAR_SETTING("DisableChanges"), 0));
+    body();
+    ImGui::EndDisabled();
+    PopStyleTabs();
+}
+
+static void DrawInventoryItemsPanel() {
+    DrawEditorPanel([]() {
+        if (gPlayState == nullptr) {
+            ImGui::TextDisabled("Load a file to edit Hyrule's inventory.");
+            return;
+        }
+        if (ImGui::BeginTabBar("FleetInventoryTabs", ImGuiTabBarFlags_NoCloseWithMiddleMouseButton)) {
+            ResetBaseOptions();
+            if (ImGui::BeginTabItem("Items")) {
+                DrawInventoryTab();
+                ImGui::EndTabItem();
+            }
+            ResetBaseOptions();
+            if (ImGui::BeginTabItem("Equipment")) {
+                DrawEquipmentTab();
+                ImGui::EndTabItem();
+            }
+            ResetBaseOptions();
+            if (ImGui::BeginTabItem("Quest Status")) {
+                DrawQuestStatusTab();
+                ImGui::EndTabItem();
+            }
+            ImGui::EndTabBar();
+        }
+    });
+}
+
+static void DrawInventoryLayoutPanel() {
+    DrawEditorPanel([]() {
+        UIWidgets::CVarCheckbox("Arrange NEI items automatically", CVAR_ENHANCEMENT("ModLayout.Auto"),
+                                UIWidgets::CheckboxOptions()
+                                    .DefaultValue(true)
+                                    .Tooltip("Mod items go on their own pages after the vanilla page (press L in the "
+                                             "pause menu): Masks, NEI Items, NEI Gear and NEI Upgrades. Bottles and "
+                                             "arrows join the vanilla wheels. An item you move here stays where you "
+                                             "put it.")
+                                    .Color(THEME_COLOR));
+        if (!ModLayout_HasMods()) {
+            ImGui::TextDisabled("No mod items to arrange.");
+            return;
+        }
+        if (ImGui::BeginTabBar("FleetLayoutTabs", ImGuiTabBarFlags_NoCloseWithMiddleMouseButton)) {
+            static const std::pair<const char*, SOHLayoutKind> kKinds[] = {
+                { "Items", SOH_LAYOUT_ITEMS },
+                { "Equipment", SOH_LAYOUT_EQUIPMENT },
+                { "Quest Status", SOH_LAYOUT_COLLECTABLES },
+            };
+            for (const auto& [title, kind] : kKinds) {
+                if (ImGui::BeginTabItem(title)) {
+                    ModLayout_DrawEditor(kind);
+                    ImGui::EndTabItem();
+                }
+            }
+            ImGui::EndTabBar();
+        }
+    });
+}
+
 void SaveEditorWindow::InitElement() {
     auto gui = std::dynamic_pointer_cast<Fast::Fast3dGui>(Ship::Context::GetRawInstance()->GetWindow()->GetGui());
     gui->LoadGuiTexture("ROCS_FEATHER", gRocsFeatherTex, "", ImVec4(1, 1, 1, 1));
     gui->LoadGuiTexture("RG_ROCS_FEATHER_PICKER", gRocsFeatherTex, "", ImVec4(1, 1, 1, 1));
+    static bool sMenuPages = false;
+    if (FleetGame_IsHosted() && !sMenuPages) {
+        sMenuPages = true;
+        ModMenu_AddFleetPage("Inventory", "Items", "inv:items", true, DrawInventoryItemsPanel);
+        ModMenu_AddFleetPage("Inventory", "NEI Items", "inv:nei", true,
+                             []() { DrawEditorPanel(DrawFleetComboItemsTab); });
+        ModMenu_AddFleetPage("Inventory", "Layout", "inv:layout", true, DrawInventoryLayoutPanel);
+    }
 }

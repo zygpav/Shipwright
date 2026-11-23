@@ -13,6 +13,7 @@
 #include <vector>
 #include <spdlog/spdlog.h>
 
+#include "soh/Fleet/FleetMenu.h"
 #include "soh/SohGui/SohGui.hpp"
 #include "soh/SohGui/SohMenu.h"
 #include "soh/SohGui/UIWidgets.hpp"
@@ -306,15 +307,21 @@ void DrawGatheredWidget(RegisteredWidget& registered) {
             ImGui::TextWrapped("%s", label);
             break;
         case SOH_MOD_MENU_CUSTOM:
-            if (definition.onChange != nullptr) {
-                definition.onChange(); // a custom widget's callback is its draw function
+            if (definition.onChange == nullptr) {
+                break;
+            }
+            // A custom widget's callback is its draw function, which may run game code: only in the running game.
+            if (FleetMenu_IsActive()) {
+                definition.onChange();
+            } else {
+                FleetMenu_InactiveNote(label[0] == '#' ? "This control" : label);
             }
             break;
         default:
             break;
     }
     if (changed && definition.type != SOH_MOD_MENU_CUSTOM && definition.onChange != nullptr) {
-        definition.onChange();
+        FleetMenu_Defer(definition.onChange);
     }
     ImGui::PopID();
 }
@@ -342,7 +349,7 @@ void DrawFleetComboPage() {
     static const std::map<int32_t, const char*> kEra = {
         { -1, "Follow Link's age" }, { 0, "Child era (past)" }, { 1, "Adult era (future)" }
     };
-    ImGui::TextWrapped("Settings for the combined OoT + MM game.");
+    ImGui::TextWrapped("Hyrule's side of the combined game.");
     ImGui::Spacing();
     UIWidgets::CVarCombobox("World Era", "gFleetCombo.Era", kEra,
                             UIWidgets::ComboboxOptions()
@@ -391,11 +398,23 @@ void EnsureSidebar(const std::string& section, const std::string& sidebar, const
     }
 }
 
+// A page drawn as both games' panels (see FleetMenu.h): this game registers its own half under the panel's name.
+void AddSplitPage(const std::string& section, const std::string& sidebar, const std::string& panel, FleetSplit split,
+                  std::function<void()> draw) {
+    FleetMenu_RegisterPanel(panel, std::move(draw));
+    EnsureSidebar(section, sidebar, "gFleetCombo.Menu." + section + "Page");
+    AddCustomPageWidget(section, sidebar, [panel, split]() { FleetMenu_DrawSplit(panel.c_str(), split); });
+}
+
 GatheredPage& AddGatheredPage(const std::string& section, const std::string& sidebar) {
     sGatheredPages.push_back({ section, sidebar, {} });
     GatheredPage* page = &sGatheredPages.back();
-    EnsureSidebar(section, sidebar, "gFleetCombo.Menu." + section + "Page");
-    AddCustomPageWidget(section, sidebar, [page]() { DrawGatheredPage(*page); });
+    if (section == "NEI") {
+        AddSplitPage(section, sidebar, "nei:" + sidebar, FleetSplit::Columns, [page]() { DrawGatheredPage(*page); });
+    } else {
+        EnsureSidebar(section, sidebar, "gFleetCombo.Menu." + section + "Page");
+        AddCustomPageWidget(section, sidebar, [page]() { DrawGatheredPage(*page); });
+    }
     return *page;
 }
 
@@ -409,9 +428,8 @@ GatheredPage& GetGatheredPage(const std::string& section, const std::string& sid
     if (section == "NEI" && std::none_of(sGatheredPages.begin(), sGatheredPages.end(),
                                          [](const auto& existing) { return existing.section == "NEI"; })) {
         // The section's pages in a fixed order, whichever mod loads first; "Other" comes last, when needed.
-        EnsureSidebar("NEI", "Fleet Combo", cvar);
-        AddCustomPageWidget("NEI", "Fleet Combo", DrawFleetComboPage);
-        for (const char* category : { "Items & Masks", "Equipment", "Gameplay", "Companions", "Visuals" }) {
+        AddSplitPage("NEI", "Fleet Combo", "nei:Fleet Combo", FleetSplit::Columns, DrawFleetComboPage);
+        for (const char* category : { "Items & Masks", "Equipment", "Gameplay", "Companions", "Visuals", "Other" }) {
             if (category != sidebar) {
                 AddGatheredPage("NEI", category);
             }
@@ -504,6 +522,11 @@ bool ModMenu_RegisterWidgetAt(const SOHModMenuWidget* widget, const char* anchor
         return false;
     }
     return StoreWidget(widget, anchor, after);
+}
+
+void ModMenu_AddFleetPage(const char* section, const char* sidebar, const char* panel, bool stacked,
+                          std::function<void()> draw) {
+    AddSplitPage(section, sidebar, panel, stacked ? FleetSplit::Stacked : FleetSplit::Columns, std::move(draw));
 }
 
 void ModMenu_Describe(std::vector<std::string>& lines) {

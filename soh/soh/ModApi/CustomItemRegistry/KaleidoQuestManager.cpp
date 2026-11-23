@@ -1,3 +1,6 @@
+#include "soh/ResourceManagerHelpers.h"
+#include <libultraship/bridge/resourcebridge.h>
+#include <string>
 #include "CustomItemRegistry.h"
 #include "soh/ModApi/Layout/ModLayout.h"
 
@@ -167,8 +170,32 @@ void KaleidoQuestManager_DrawPoints(PlayState* play) {
         if (icon == nullptr) {
             continue;
         }
-        gSPVertex(POLY_OPA_DISP++, (uintptr_t)&pauseCtx->questVtx[point * 4], 4, 0);
-        KaleidoScope_DrawQuadTextureRGBA32(gfxCtx, const_cast<char*>(icon), 24, 24, 0);
+        // Drawn at the icon's own size (a mod's medallion is often a 32x32 item icon), stretched over the point.
+        int width = 24;
+        int height = 24;
+        std::string path = icon;
+        if (path.rfind("__OTR__", 0) == 0) {
+            path = path.substr(7);
+        }
+        if (ResourceMgr_FileExists(path.c_str())) {
+            const int w = ResourceGetTexWidthByName(path.c_str());
+            const int h = ResourceGetTexHeightByName(path.c_str());
+            if (w > 0 && h > 0 && w <= 64 && h <= 64) {
+                width = w;
+                height = h;
+            }
+        }
+        Vtx* quad = static_cast<Vtx*>(Graph_Alloc(gfxCtx, sizeof(Vtx) * 4));
+        if (quad == nullptr) {
+            continue;
+        }
+        for (int i = 0; i < 4; ++i) {
+            quad[i] = pauseCtx->questVtx[point * 4 + i];
+            quad[i].v.tc[0] = (i % 2) ? width << 5 : 0;
+            quad[i].v.tc[1] = (i / 2) ? height << 5 : 0;
+        }
+        gSPVertex(POLY_OPA_DISP++, (uintptr_t)quad, 4, 0);
+        KaleidoScope_DrawQuadTextureRGBA32(gfxCtx, const_cast<char*>(icon), width, height, 0);
     }
 
     CLOSE_DISPS(gfxCtx);

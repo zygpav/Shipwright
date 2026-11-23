@@ -195,6 +195,12 @@ void Run(const std::string& line) {
         }
     } else if (verb == "menudump") {
         DumpMenu();
+    } else if (verb == "layout") {
+        std::vector<std::string> lines;
+        ModLayout_Describe(lines);
+        for (const auto& line : lines) {
+            Report("layout " + line);
+        }
     } else if (verb == "cvar") {
         std::string name;
         std::string value;

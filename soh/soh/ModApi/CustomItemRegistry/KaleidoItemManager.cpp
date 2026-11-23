@@ -1,3 +1,4 @@
+#include "soh/Fleet/FleetGame.h"
 #include "CustomItemRegistry.h"
 #include "soh/ModApi/Layout/ModLayout.h"
 
@@ -196,6 +197,14 @@ void BuildVisiblePages() {
         if (CustomItemRegistry_IsQuestPage(placement.page)) {
             continue;
         }
+        // Fleet Combo: the layout shows mod items on its own pages; only bottles and arrows join vanilla wheels.
+        if (ModLayout_IsAuto()) {
+            const std::string key = definition->key;
+            if (placement.page != SOH_ITEM_PAGE_VANILLA ||
+                (key.find("bottle") == std::string::npos && key.find("arrow") == std::string::npos)) {
+                continue;
+            }
+        }
         pages[placement.page][placement.slot].push_back(definition);
     }
 
@@ -391,7 +400,8 @@ void RegisterMenu() {
         .Options(UIWidgets::CheckboxOptions().Tooltip(
             "Press C-Up over a custom item to replay its get-item textbox without granting it again."));
     SohGui::mSohMenu->AddWidget(path, "Mods Items Layout", WIDGET_CUSTOM)
-        .PreFunc([](WidgetInfo& info) { info.isHidden = !ModLayout_HasMods(); })
+        // Fleet Combo: the layout editor is in the Inventory section.
+        .PreFunc([](WidgetInfo& info) { info.isHidden = !ModLayout_HasMods() || FleetGame_IsHosted(); })
         .CustomFunction([](WidgetInfo&) { ModLayout_DrawWindowButton(); });
 }
 

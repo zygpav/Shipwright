@@ -177,14 +177,17 @@ void KaleidoQuestManager_DrawPoints(PlayState* play) {
         if (path.rfind("__OTR__", 0) == 0) {
             path = path.substr(7);
         }
-        if (ResourceMgr_FileExists(path.c_str())) {
-            const int w = ResourceGetTexWidthByName(path.c_str());
-            const int h = ResourceGetTexHeightByName(path.c_str());
-            if (w > 0 && h > 0 && w <= 64 && h <= 64) {
-                width = w;
-                height = h;
-            }
+        // An icon that isn't loaded, or isn't a plain texture, would be drawn as noise: leave the point empty.
+        if (!ResourceMgr_FileExists(path.c_str())) {
+            continue;
         }
+        const int w = ResourceGetTexWidthByName(path.c_str());
+        const int h = ResourceGetTexHeightByName(path.c_str());
+        if (w <= 0 || h <= 0 || w > 64 || h > 64) {
+            continue;
+        }
+        width = w;
+        height = h;
         Vtx* quad = static_cast<Vtx*>(Graph_Alloc(gfxCtx, sizeof(Vtx) * 4));
         if (quad == nullptr) {
             continue;

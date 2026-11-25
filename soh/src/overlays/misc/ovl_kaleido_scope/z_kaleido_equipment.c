@@ -818,9 +818,10 @@ void KaleidoScope_DrawEquipment(PlayState* play) {
                 gSPGrayscale(POLY_OPA_DISP++, false);
             }
         } else {
-            if ((i == 0) &&
-                (CUR_UPG_VALUE(sAdultUpgrades[i]) ==
+            if ((i == 0) && (CUR_UPG_VALUE(sAdultUpgrades[i]) == 0) &&
+                (CUR_UPG_VALUE(sChildUpgrades[i]) !=
                  0)) { // If the player doesn't have the bow, load the current slingshot ammo upgrade instead.
+                // (Only with a bullet bag: with neither, the icon index lands on the Hover Boots.)
                 // Check the base item, the upgrade level can be 0 here
                 if (!CHECK_AGE_REQ_ITEM(sChildUpgradeItemBases[i])) {
                     gDPSetGrayscaleColor(POLY_OPA_DISP++, 109, 109, 109, 255); // Grey Out Slingshot Bullet Bags

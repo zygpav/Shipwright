@@ -81,18 +81,24 @@ void FleetMenu_DrawSplit(const char* panel, FleetSplit split) {
             DrawGame(games[column], panel);
         }
         ImGui::EndTable();
-    } else {
+    } else if (ImGui::BeginTabBar("fleet.games")) {
+        // Opens on the world Link is in; the other world's tab is one click away.
+        const auto active = reinterpret_cast<const char* (*)()>(FleetGame_GetHostFunction("ActiveGame"));
+        const char* playing = active != nullptr ? active() : nullptr;
+        static std::string sLastPlaying;
+        const bool travelled = playing != nullptr && sLastPlaying != playing;
+        if (playing != nullptr) {
+            sLastPlaying = playing;
+        }
         for (const auto& game : games) {
-            ImGui::PushID(game.c_str());
-            const bool open = ImGui::CollapsingHeader(Title(game), ImGuiTreeNodeFlags_DefaultOpen);
-            ImGui::PopID();
-            if (open) {
-                ImGui::Indent(6);
+            const ImGuiTabItemFlags flags =
+                travelled && game == playing ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None;
+            if (ImGui::BeginTabItem(Title(game), nullptr, flags)) {
                 DrawGame(game, panel);
-                ImGui::Unindent(6);
-                ImGui::Spacing();
+                ImGui::EndTabItem();
             }
         }
+        ImGui::EndTabBar();
     }
     ImGui::PopID();
 }

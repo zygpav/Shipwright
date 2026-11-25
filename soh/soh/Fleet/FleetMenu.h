@@ -10,7 +10,7 @@
 
 enum class FleetSplit {
     Columns, // OoT | MM side by side: settings pages
-    Stacked, // OoT above MM, each under its own header: wide editors
+    Stacked, // one tab per game, opening on the game being played: wide editors
 };
 
 // Registers this game's draw function for a panel.

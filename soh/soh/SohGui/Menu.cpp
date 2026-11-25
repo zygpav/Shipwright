@@ -674,6 +674,11 @@ void Menu::DrawElement() {
     ImGui::PushFont(OTRGlobals::Instance->fontStandardLargest);
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10.0f, 8.0f));
     std::string headerIndex = CVarGetString(headerCvar, "Settings");
+    // A header saved by an older build (or a mod no longer loaded) may be gone: fall back to the first one.
+    if (!menuEntries.contains(headerIndex) || menuEntries.at(headerIndex).sidebarOrder.empty()) {
+        headerIndex = menuOrder.empty() ? std::string("Settings") : menuOrder.front();
+        CVarSetString(headerCvar, headerIndex.c_str());
+    }
     ImVec2 pos = window->DC.CursorPos;
     float centerX = pos.x + windowWidth / 2 - (style.ItemSpacing.x * (menuEntries.size() + 1));
     std::vector<ImVec2> headerSizes;

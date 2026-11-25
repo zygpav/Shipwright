@@ -252,15 +252,29 @@ void ReportChecks() {
 } // namespace
 
 void FleetRuntime_Initialize() {
-    if (!sSession.is_null()) {
+    // The host's session follows the file picked on the file select screen, so it can change while the game runs
+    // (back to file select, another file): keep this copy in step, or saves are checked against the wrong slot.
+    static int sVersion = -1;
+    static bool sRegistered = false;
+    const auto version = Host<int (*)()>("SessionVersion");
+    const int current = version != nullptr ? version() : 0;
+    if (current == sVersion && (version != nullptr || !sSession.is_null())) {
         return;
     }
     const auto get = Host<const char* (*)()>("GetSession");
     const char* raw = get != nullptr ? get() : nullptr;
+    sVersion = current;
     if (raw == nullptr) {
+        sSession = nullptr;
         return;
     }
     sSession = nlohmann::json::parse(raw);
+    if (sRegistered) {
+        FleetForeignItems_Register(FleetRuntime_Seed());
+        FleetRuntime_InstallRoutes();
+        return;
+    }
+    sRegistered = true;
     SOHCustomItemRandomizer randomizer = {};
     randomizer.structSize = sizeof(randomizer);
     SOHCustomItemDefinition definition = {};

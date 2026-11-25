@@ -1255,7 +1255,10 @@ static void DrawNeiItemsPanel() {
 
     const float cell = 44.0f;
     const float spacing = ImGui::GetStyle().ItemSpacing.x;
-    const int perRow = std::max(1, static_cast<int>((ImGui::GetContentRegionAvail().x + spacing) / (cell + spacing)));
+    // An image button is its image plus the frame padding on both sides (the menu theme pads generously).
+    const float button = (cell - 8) + ImGui::GetStyle().FramePadding.x * 2;
+    const int perRow =
+        std::max(1, static_cast<int>((ImGui::GetContentRegionAvail().x + spacing) / (button + spacing)));
     int column = 0;
     for (const auto* definition : items) {
         const char* name = CustomItemName(definition);
